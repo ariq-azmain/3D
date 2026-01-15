@@ -17,90 +17,29 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FilmShader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BloomPass.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.min.js"></script>
     
     <!-- Animation and UI Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2.3.4/tsparticles.bundle.min.js"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -khtml-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            touch-action: none;
-            background: #000;
-            font-family: 'Orbitron', 'Exo 2', sans-serif;
-        }
-        
-        #gameContainer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-        
-        /* FPS Counter */
-        #fpsCounter {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            color: #00ff00;
-            font-family: 'Orbitron', monospace;
-            font-size: 14px;
-            z-index: 1000;
-            background: rgba(0,0,0,0.5);
-            padding: 5px 10px;
-            border-radius: 3px;
-        }
-        
-        /* Performance Warning */
-        #perfWarning {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 100, 0, 0.9);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 2000;
-            display: none;
-            text-align: center;
-            max-width: 400px;
-        }
-    </style>
 </head>
 <body>
     <!-- FPS Counter -->
     <div id="fpsCounter">FPS: 60</div>
     
     <!-- Performance Warning -->
-    <div id="perfWarning">
+    <div id="perfWarning" class="hidden">
         <h3><i class="fas fa-exclamation-triangle"></i> PERFORMANCE WARNING</h3>
         <p>Your device is struggling to run the game smoothly.</p>
         <p>Lowering graphics quality...</p>
-        <button id="closePerfWarning" style="margin-top: 10px; padding: 5px 15px; background: #ff5500; color: white; border: none; border-radius: 5px;">OK</button>
+        <button id="closePerfWarning">OK</button>
     </div>
     
     <!-- Game Container -->
@@ -111,8 +50,10 @@
         <div class="loader">
             <div class="spaceship-loader">
                 <div class="ship-model">
-                    <i class="fas fa-rocket fa-4x"></i>
-                    <div class="engine-glow"></div>
+                    <div class="rocket-body">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                    <div class="engine-flame"></div>
                 </div>
             </div>
             <h2>GALACTIC WAR</h2>
@@ -122,68 +63,11 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="loadingProgress"></div>
                 </div>
-                <div class="progress-text" id="loadingText">Loading Game Engine...</div>
+                <div class="progress-text" id="loadingText">Initializing Game Engine...</div>
             </div>
             <div class="loading-tips">
-                <p><i class="fas fa-lightbulb"></i> Tip: Use both joysticks for precise control</p>
-                <p><i class="fas fa-lightbulb"></i> Tip: Collect power-ups to enhance your ship</p>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Story Screen -->
-    <div id="storyScreen" class="screen hidden">
-        <div class="story-content">
-            <div class="story-header">
-                <h1>MISSION BRIEFING</h1>
-                <div class="mission-tag">CLASSIFIED - EYES ONLY</div>
-            </div>
-            
-            <div class="story-text">
-                <div class="story-paragraph">
-                    <p><span class="story-year">EARTH YEAR 2250</span></p>
-                    <p>For decades, humanity has known about the Alien Space Station orbiting Jupiter. We thought it was abandoned.</p>
-                    <p>We were wrong.</p>
-                </div>
-                
-                <div class="story-paragraph">
-                    <p>Last week, the station activated its weapons systems and destroyed three of our research vessels.</p>
-                    <p>Intelligence indicates they're preparing for a full-scale invasion of Earth.</p>
-                </div>
-                
-                <div class="story-paragraph highlight">
-                    <p><i class="fas fa-crosshairs"></i> <strong>YOUR MISSION:</strong></p>
-                    <p>1. Navigate through the asteroid field</p>
-                    <p>2. Eliminate alien defense squadrons</p>
-                    <p>3. Breach the space station defenses</p>
-                    <p>4. Destroy the station's core reactor</p>
-                </div>
-                
-                <div class="story-paragraph">
-                    <p>You are humanity's last hope, Commander Ariq Azmain.</p>
-                    <p class="mission-success">Godspeed.</p>
-                </div>
-            </div>
-            
-            <div class="voice-controls">
-                <button id="playVoiceover" class="voice-btn">
-                    <i class="fas fa-play"></i> PLAY VOICEOVER
-                </button>
-                <button id="skipVoiceover" class="voice-btn">
-                    <i class="fas fa-forward"></i> SKIP VOICEOVER
-                </button>
-                <button id="muteVoiceover" class="voice-btn">
-                    <i class="fas fa-volume-up"></i> MUTE
-                </button>
-            </div>
-            
-            <div class="story-buttons">
-                <button id="startMissionBtn" class="mission-btn">
-                    <i class="fas fa-rocket"></i> ACCEPT MISSION
-                </button>
-                <button id="backToMenuFromStory" class="mission-btn secondary">
-                    <i class="fas fa-arrow-left"></i> BACK TO MENU
-                </button>
+                <p><i class="fas fa-lightbulb"></i> Tip: Follow the glowing waypoints to complete the mission</p>
+                <p><i class="fas fa-lightbulb"></i> Tip: Collect health packs to restore your ship</p>
             </div>
         </div>
     </div>
@@ -194,7 +78,7 @@
             <div class="menu-header">
                 <h1 class="game-title">GALACTIC WAR</h1>
                 <h2 class="commander-name">Commander: Ariq Azmain</h2>
-                <div class="version-tag">v2.0 - Professional Edition</div>
+                <div class="version-tag">v3.0 - Mission Edition</div>
             </div>
             
             <div class="menu-stats">
@@ -224,34 +108,84 @@
             <div class="menu-buttons">
                 <button id="newGameBtn" class="menu-btn primary">
                     <i class="fas fa-play-circle"></i>
-                    <span>NEW MISSION</span>
+                    <span>START MISSION</span>
                 </button>
-                <button id="continueBtn" class="menu-btn">
+                <button id="continueBtn" class="menu-btn" disabled>
                     <i class="fas fa-redo"></i>
                     <span>CONTINUE</span>
                 </button>
-                <button id="instructionsBtn" class="menu-btn">
+                <button id="howToPlayBtn" class="menu-btn">
                     <i class="fas fa-info-circle"></i>
-                    <span>INSTRUCTIONS</span>
+                    <span>HOW TO PLAY</span>
                 </button>
                 <button id="settingsBtn" class="menu-btn">
                     <i class="fas fa-cog"></i>
                     <span>SETTINGS</span>
                 </button>
-                <button id="creditsBtn" class="menu-btn">
-                    <i class="fas fa-users"></i>
-                    <span>CREDITS</span>
-                </button>
             </div>
             
             <div class="menu-footer">
-                <div class="control-scheme">
-                    <p><i class="fas fa-gamepad"></i> Gamepad Supported</p>
-                    <p><i class="fas fa-mobile-alt"></i> Touch Controls Optimized</p>
+                <p><i class="fas fa-gamepad"></i> Use Arrow Keys/WASD to move</p>
+                <p><i class="fas fa-mouse"></i> Mouse to aim, Left Click to fire</p>
+                <p><i class="fas fa-space-shuttle"></i> SPACE for boost, R for missiles</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- How to Play -->
+    <div id="howToPlayScreen" class="screen hidden">
+        <div class="how-to-content">
+            <h1><i class="fas fa-graduation-cap"></i> HOW TO PLAY</h1>
+            
+            <div class="controls-grid">
+                <div class="control-item">
+                    <div class="control-icon"><i class="fas fa-arrows-alt"></i></div>
+                    <div class="control-info">
+                        <h3>MOVEMENT</h3>
+                        <p>Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to move your ship</p>
+                    </div>
                 </div>
-                <div class="graphics-info">
-                    <p><i class="fas fa-desktop"></i> Advanced Graphics Enabled</p>
+                
+                <div class="control-item">
+                    <div class="control-icon"><i class="fas fa-mouse-pointer"></i></div>
+                    <div class="control-info">
+                        <h3>AIMING</h3>
+                        <p>Move <strong>mouse</strong> to aim at enemies</p>
+                    </div>
                 </div>
+                
+                <div class="control-item">
+                    <div class="control-icon"><i class="fas fa-fire"></i></div>
+                    <div class="control-info">
+                        <h3>WEAPONS</h3>
+                        <p><strong>Left Click</strong> - Fire bullets (Unlimited)</p>
+                        <p><strong>Right Click</strong> - Fire bombs (Limited)</p>
+                        <p><strong>R Key</strong> - Fire missiles (Limited)</p>
+                    </div>
+                </div>
+                
+                <div class="control-item">
+                    <div class="control-icon"><i class="fas fa-rocket"></i></div>
+                    <div class="control-info">
+                        <h3>BOOST</h3>
+                        <p>Press <strong>SPACE</strong> for speed boost</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mission-objective">
+                <h3><i class="fas fa-crosshairs"></i> MISSION OBJECTIVE</h3>
+                <p>1. Follow the glowing waypoints through asteroid field</p>
+                <p>2. Destroy enemy alien ships along the way</p>
+                <p>3. Reach the Alien Space Station</p>
+                <p>4. Destroy all defenses and the main reactor</p>
+                <p class="warning">⚠️ Collect health packs to restore your ship!</p>
+            </div>
+            
+            <div class="howto-buttons">
+                <button id="backToMenuBtn" class="menu-btn primary">
+                    <i class="fas fa-arrow-left"></i> BACK TO MENU
+                </button>
             </div>
         </div>
     </div>
@@ -262,7 +196,7 @@
         <div class="hud-top">
             <div class="hud-section left">
                 <div class="hud-item">
-                    <div class="hud-label">SHIP INTEGRITY</div>
+                    <div class="hud-label">SHIP HEALTH</div>
                     <div class="hud-bar">
                         <div class="bar-background"></div>
                         <div class="bar-fill health" id="healthBar"></div>
@@ -270,11 +204,11 @@
                     </div>
                 </div>
                 <div class="hud-item">
-                    <div class="hud-label">SHIELD CAPACITY</div>
+                    <div class="hud-label">ENERGY</div>
                     <div class="hud-bar">
                         <div class="bar-background"></div>
-                        <div class="bar-fill shield" id="shieldBar"></div>
-                        <div class="bar-text" id="shieldText">100%</div>
+                        <div class="bar-fill energy" id="energyBar"></div>
+                        <div class="bar-text" id="energyText">100%</div>
                     </div>
                 </div>
             </div>
@@ -282,7 +216,7 @@
             <div class="hud-section center">
                 <div class="mission-info">
                     <div class="mission-label">MISSION OBJECTIVE</div>
-                    <div class="mission-text" id="missionText">Destroy Alien Space Station</div>
+                    <div class="mission-text" id="missionText">Reach Waypoint 1</div>
                     <div class="mission-progress">
                         <div class="progress-track"></div>
                         <div class="progress-fill" id="missionProgress"></div>
@@ -301,225 +235,166 @@
                 </div>
                 <div class="hud-item">
                     <div class="hud-label">DISTANCE</div>
-                    <div class="hud-value" id="distanceValue">0 km</div>
+                    <div class="hud-value" id="distanceValue">0m</div>
                 </div>
             </div>
         </div>
         
         <!-- Center HUD -->
         <div class="hud-center">
-            <div class="crosshair" id="crosshair">
+            <div class="crosshair">
                 <div class="crosshair-dot"></div>
-                <div class="crosshair-lines">
-                    <div class="line horizontal"></div>
-                    <div class="line vertical"></div>
+                <div class="crosshair-ring"></div>
+                <div class="target-lock" id="targetLock"></div>
+            </div>
+            
+            <div class="weapon-display">
+                <div class="weapon-info">
+                    <div class="weapon-icon" id="currentWeaponIcon">
+                        <i class="fas fa-crosshairs"></i>
+                    </div>
+                    <div class="weapon-ammo">
+                        <div class="ammo-type">BULLETS: <span id="bulletCount">∞</span></div>
+                        <div class="ammo-type">BOMBS: <span id="bombCount">10</span></div>
+                        <div class="ammo-type">MISSILES: <span id="missileCount">3</span></div>
+                    </div>
                 </div>
-                <div class="targeting-info" id="targetInfo"></div>
             </div>
             
             <div class="speed-indicator">
-                <div class="speed-ring">
-                    <div class="speed-fill" id="speedFill"></div>
+                <div class="speed-gauge">
+                    <div class="speed-needle"></div>
                 </div>
                 <div class="speed-value" id="speedValue">0</div>
                 <div class="speed-label">SPEED</div>
-            </div>
-            
-            <div class="radar">
-                <div class="radar-background"></div>
-                <div class="radar-sweep"></div>
-                <div class="radar-dots">
-                    <!-- Enemy dots will be added here -->
-                </div>
-                <div class="player-dot"></div>
             </div>
         </div>
         
         <!-- Bottom HUD -->
         <div class="hud-bottom">
-            <div class="weapon-system">
-                <div class="weapon-selector">
-                    <div class="weapon-slots">
-                        <div class="weapon-slot active" data-weapon="laser">
-                            <i class="fas fa-bolt"></i>
-                            <span class="weapon-name">LASER</span>
-                            <div class="ammo-count">∞</div>
-                        </div>
-                        <div class="weapon-slot" data-weapon="missile">
-                            <i class="fas fa-rocket"></i>
-                            <span class="weapon-name">MISSILE</span>
-                            <div class="ammo-count" id="missileCount">12</div>
-                        </div>
-                        <div class="weapon-slot" data-weapon="plasma">
-                            <i class="fas fa-fire"></i>
-                            <span class="weapon-name">PLASMA</span>
-                            <div class="ammo-count" id="plasmaCount">30</div>
-                        </div>
-                        <div class="weapon-slot" data-weapon="railgun">
-                            <i class="fas fa-gem"></i>
-                            <span class="weapon-name">RAILGUN</span>
-                            <div class="ammo-count" id="railgunCount">5</div>
-                        </div>
+            <div class="objective-tracker">
+                <div class="objective-title">WAYPOINTS</div>
+                <div class="waypoint-list">
+                    <div class="waypoint-item active" data-waypoint="1">
+                        <i class="fas fa-circle"></i> Waypoint 1
                     </div>
-                </div>
-                
-                <div class="weapon-info">
-                    <div class="info-item">
-                        <i class="fas fa-crosshairs"></i>
-                        <span id="currentWeapon">LASER CANNON</span>
+                    <div class="waypoint-item" data-waypoint="2">
+                        <i class="fas fa-circle"></i> Waypoint 2
                     </div>
-                    <div class="info-item">
-                        <i class="fas fa-bullseye"></i>
-                        <span id="targetDistance">--</span>
+                    <div class="waypoint-item" data-waypoint="3">
+                        <i class="fas fa-circle"></i> Waypoint 3
+                    </div>
+                    <div class="waypoint-item" data-waypoint="4">
+                        <i class="fas fa-circle"></i> Waypoint 4
+                    </div>
+                    <div class="waypoint-item" data-waypoint="5">
+                        <i class="fas fa-circle"></i> Space Station
                     </div>
                 </div>
             </div>
             
             <div class="system-status">
-                <div class="status-item">
-                    <div class="status-icon engine">
-                        <i class="fas fa-rocket"></i>
-                    </div>
-                    <div class="status-label">ENGINE</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-icon weapons">
-                        <i class="fas fa-crosshairs"></i>
-                    </div>
-                    <div class="status-label">WEAPONS</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-icon shields">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <div class="status-label">SHIELDS</div>
-                </div>
-                <div class="status-item">
-                    <div class="status-icon sensors">
-                        <i class="fas fa-satellite-dish"></i>
-                    </div>
-                    <div class="status-label">SENSORS</div>
-                </div>
-            </div>
-            
-            <div class="action-buttons">
-                <button class="action-btn boost" id="boostBtn">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>BOOST</span>
-                </button>
-                <button class="action-btn fire primary" id="fireBtn">
-                    <i class="fas fa-fire"></i>
-                    <span>FIRE</span>
-                </button>
-                <button class="action-btn special" id="specialBtn">
-                    <i class="fas fa-star"></i>
-                    <span>SPECIAL</span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Warnings and Notifications -->
-        <div class="hud-warnings">
-            <div class="warning critical hidden" id="criticalWarning">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>CRITICAL DAMAGE!</span>
-            </div>
-            <div class="warning missile hidden" id="missileWarning">
-                <i class="fas fa-rocket"></i>
-                <span>INCOMING MISSILE!</span>
-            </div>
-            <div class="notification powerup hidden" id="powerupNotification">
-                <i class="fas fa-arrow-up"></i>
-                <span>POWERUP COLLECTED</span>
-            </div>
-        </div>
-        
-        <!-- Objective Updates -->
-        <div class="objective-update hidden" id="objectiveUpdate">
-            <div class="objective-icon">
-                <i class="fas fa-bullseye"></i>
-            </div>
-            <div class="objective-content">
-                <div class="objective-title" id="objectiveTitle"></div>
-                <div class="objective-text" id="objectiveText"></div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Mobile Controls -->
-    <div id="mobileControls" class="hidden">
-        <div class="control-left">
-            <div class="joystick-container">
-                <div class="joystick-base" id="moveJoystick">
-                    <div class="joystick-handle"></div>
-                </div>
-                <div class="joystick-label">MOVEMENT</div>
-            </div>
-        </div>
-        
-        <div class="control-right">
-            <div class="joystick-container">
-                <div class="joystick-base" id="lookJoystick">
-                    <div class="joystick-handle"></div>
-                </div>
-                <div class="joystick-label">AIMING</div>
-            </div>
-            
-            <div class="action-buttons-mobile">
-                <button class="mobile-btn fire-btn" id="mobileFire">
-                    <i class="fas fa-crosshairs"></i>
-                </button>
-                <button class="mobile-btn boost-btn" id="mobileBoost">
+                <div class="status-item active" id="engineStatus">
                     <i class="fas fa-rocket"></i>
-                </button>
-                <button class="mobile-btn special-btn" id="mobileSpecial">
-                    <i class="fas fa-star"></i>
-                </button>
+                    <span>ENGINE</span>
+                </div>
+                <div class="status-item active" id="weaponStatus">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>WEAPONS</span>
+                </div>
+                <div class="status-item active" id="shieldStatus">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>SHIELD</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Warnings -->
+        <div class="hud-warnings">
+            <div class="warning hidden" id="damageWarning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>TAKING DAMAGE!</span>
+            </div>
+            <div class="warning hidden" id="missileWarning">
+                <i class="fas fa-rocket"></i>
+                    <span>INCOMING MISSILE!</span>
+            </div>
+            <div class="notification hidden" id="healthPickup">
+                <i class="fas fa-heart"></i>
+                <span>HEALTH RESTORED +20</span>
             </div>
         </div>
     </div>
     
-    <!-- Pause Menu -->
-    <div id="pauseMenu" class="screen hidden">
-        <div class="pause-content">
-            <div class="pause-header">
-                <h1><i class="fas fa-pause"></i> MISSION PAUSED</h1>
-                <p>Commander Ariq Azmain</p>
+    <!-- Damage Overlay -->
+    <div id="damageOverlay" class="hidden"></div>
+    
+    <!-- Waypoint Indicator -->
+    <div id="waypointIndicator" class="hidden">
+        <div class="waypoint-marker">
+            <i class="fas fa-location-arrow"></i>
+            <span class="waypoint-distance" id="waypointDistance">1000m</span>
+        </div>
+        <div class="waypoint-progress">
+            <div class="progress-line"></div>
+            <div class="progress-dots">
+                <div class="dot active" data-point="1"></div>
+                <div class="dot" data-point="2"></div>
+                <div class="dot" data-point="3"></div>
+                <div class="dot" data-point="4"></div>
+                <div class="dot" data-point="5"></div>
             </div>
-            
-            <div class="pause-stats">
-                <div class="pause-stat">
-                    <div class="stat-name">Mission Time</div>
-                    <div class="stat-value" id="pauseTime">00:00</div>
-                </div>
-                <div class="pause-stat">
-                    <div class="stat-name">Enemies Destroyed</div>
-                    <div class="stat-value" id="pauseKills">0</div>
-                </div>
-                <div class="pause-stat">
-                    <div class="stat-name">Accuracy</div>
-                    <div class="stat-value" id="pauseAccuracy">0%</div>
-                </div>
-                <div class="pause-stat">
-                    <div class="stat-name">Damage Taken</div>
-                    <div class="stat-value" id="pauseDamage">0%</div>
-                </div>
+        </div>
+    </div>
+    
+    <!-- Congratulations Popup -->
+    <div id="congratulationsPopup" class="popup hidden">
+        <div class="popup-content">
+            <div class="popup-icon">
+                <i class="fas fa-trophy"></i>
             </div>
-            
-            <div class="pause-buttons">
-                <button id="resumeBtn" class="pause-btn primary">
-                    <i class="fas fa-play"></i> RESUME MISSION
-                </button>
-                <button id="restartBtn" class="pause-btn">
-                    <i class="fas fa-redo"></i> RESTART MISSION
-                </button>
-                <button id="settingsPauseBtn" class="pause-btn">
-                    <i class="fas fa-cog"></i> SETTINGS
-                </button>
-                <button id="quitBtn" class="pause-btn danger">
-                    <i class="fas fa-sign-out-alt"></i> QUIT TO MENU
-                </button>
+            <h2 id="congratsTitle">WAYPOINT REACHED!</h2>
+            <p id="congratsMessage">Proceeding to next objective...</p>
+            <button id="continueMissionBtn" class="popup-btn">
+                CONTINUE <i class="fas fa-forward"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Final Battle HUD -->
+    <div id="finalBattleHUD" class="hidden">
+        <div class="battle-header">
+            <h2><i class="fas fa-skull-crossbones"></i> FINAL BATTLE</h2>
+            <p>Destroy the Alien Space Station!</p>
+        </div>
+        
+        <div class="station-health">
+            <div class="health-label">STATION HEALTH</div>
+            <div class="health-bar">
+                <div class="health-fill" id="stationHealthBar"></div>
+                <div class="health-text" id="stationHealthText">100%</div>
             </div>
+        </div>
+        
+        <div class="defense-layers">
+            <div class="layer outer-layer active">
+                <i class="fas fa-shield-alt"></i> Outer Defenses
+            </div>
+            <div class="layer inner-layer">
+                <i class="fas fa-home"></i> Inner Structures
+            </div>
+            <div class="layer core-layer">
+                <i class="fas fa-radiation"></i> Main Reactor
+            </div>
+        </div>
+        
+        <div class="special-weapons">
+            <button id="useDroneBtn" class="weapon-btn">
+                <i class="fas fa-robot"></i> DEPLOY DRONE
+            </button>
+            <button id="useNukeBtn" class="weapon-btn nuke">
+                <i class="fas fa-bomb"></i> NUCLEAR BOMB
+            </button>
         </div>
     </div>
     
@@ -528,51 +403,34 @@
         <div class="game-over-content">
             <div class="game-over-header">
                 <h1 id="gameOverTitle">MISSION FAILED</h1>
-                <div class="mission-tag">Alien Space Station Assault</div>
+                <p>Your ship has been destroyed</p>
             </div>
             
             <div class="game-over-stats">
-                <div class="stat-grid">
-                    <div class="stat-item">
-                        <div class="stat-label">MISSION TIME</div>
-                        <div class="stat-value" id="finalTime">00:00</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">ENEMIES DESTROYED</div>
-                        <div class="stat-value" id="finalKills">0</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">ACCURACY</div>
-                        <div class="stat-value" id="finalAccuracy">0%</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">SCORE</div>
-                        <div class="stat-value highlight" id="finalScore">0</div>
-                    </div>
+                <div class="stat-item">
+                    <span>Distance Traveled</span>
+                    <strong id="finalDistance">0m</strong>
                 </div>
-            </div>
-            
-            <div class="performance-rating">
-                <div class="rating-label">MISSION RATING</div>
-                <div class="rating-stars">
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
-                    <i class="fas fa-star"></i>
+                <div class="stat-item">
+                    <span>Enemies Destroyed</span>
+                    <strong id="finalKills">0</strong>
                 </div>
-                <div class="rating-text" id="ratingText">ROOKIE PILOT</div>
+                <div class="stat-item">
+                    <span>Waypoints Reached</span>
+                    <strong id="finalWaypoints">0/5</strong>
+                </div>
+                <div class="stat-item">
+                    <span>Final Score</span>
+                    <strong id="finalScore" class="highlight">0</strong>
+                </div>
             </div>
             
             <div class="game-over-buttons">
                 <button id="retryBtn" class="game-over-btn primary">
                     <i class="fas fa-redo"></i> RETRY MISSION
                 </button>
-                <button id="menuBtn" class="game-over-btn">
+                <button id="quitToMenuBtn" class="game-over-btn">
                     <i class="fas fa-home"></i> MAIN MENU
-                </button>
-                <button id="shareBtn" class="game-over-btn">
-                    <i class="fas fa-share-alt"></i> SHARE SCORE
                 </button>
             </div>
         </div>
@@ -581,63 +439,46 @@
     <!-- Mission Complete Screen -->
     <div id="missionCompleteScreen" class="screen hidden">
         <div class="mission-complete-content">
-            <div class="celebration">
-                <div class="confetti"></div>
-                <div class="confetti"></div>
-                <div class="confetti"></div>
+            <div class="confetti-container"></div>
+            
+            <div class="complete-header">
+                <h1><i class="fas fa-trophy"></i> MISSION ACCOMPLISHED!</h1>
+                <p class="subtitle">Alien Space Station Destroyed</p>
             </div>
             
-            <div class="mission-complete-header">
-                <h1><i class="fas fa-trophy"></i> MISSION ACCOMPLISHED</h1>
-                <p class="mission-tag">Alien Space Station Destroyed</p>
-            </div>
-            
-            <div class="mission-summary">
-                <div class="summary-item">
+            <div class="complete-stats">
+                <div class="stat-card">
                     <i class="fas fa-clock"></i>
-                    <div class="summary-content">
-                        <div class="summary-label">Time to Complete</div>
-                        <div class="summary-value" id="completeTime">00:00</div>
-                    </div>
+                    <h3>Mission Time</h3>
+                    <p id="missionTime">00:00</p>
                 </div>
-                <div class="summary-item">
+                <div class="stat-card">
                     <i class="fas fa-skull-crossbones"></i>
-                    <div class="summary-content">
-                        <div class="summary-label">Alien Forces Eliminated</div>
-                        <div class="summary-value" id="completeKills">0</div>
-                    </div>
+                    <h3>Enemies Destroyed</h3>
+                    <p id="totalKills">0</p>
                 </div>
-                <div class="summary-item">
-                    <i class="fas fa-crosshairs"></i>
-                    <div class="summary-content">
-                        <div class="summary-label">Combat Accuracy</div>
-                        <div class="summary-value" id="completeAccuracy">0%</div>
-                    </div>
-                </div>
-                <div class="summary-item highlight">
+                <div class="stat-card">
                     <i class="fas fa-medal"></i>
-                    <div class="summary-content">
-                        <div class="summary-label">Final Score</div>
-                        <div class="summary-value" id="completeScore">0</div>
-                    </div>
+                    <h3>Accuracy</h3>
+                    <p id="missionAccuracy">0%</p>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-star"></i>
+                    <h3>Final Score</h3>
+                    <p id="missionScore" class="highlight">0</p>
                 </div>
             </div>
             
             <div class="promotion">
-                <div class="promotion-icon">
-                    <i class="fas fa-star"></i>
-                </div>
-                <div class="promotion-text">
-                    <h3>PROMOTION EARNED</h3>
-                    <p>Commander Ariq Azmain has been promoted to <span id="newRank">FLEET ADMIRAL</span></p>
-                </div>
+                <i class="fas fa-crown"></i>
+                <h2>Commander Ariq Azmain has been promoted to <span class="rank">FLEET ADMIRAL</span></h2>
             </div>
             
-            <div class="mission-complete-buttons">
-                <button id="nextMissionBtn" class="complete-btn primary">
-                    <i class="fas fa-forward"></i> NEXT MISSION
+            <div class="complete-buttons">
+                <button id="playAgainBtn" class="complete-btn primary">
+                    <i class="fas fa-redo"></i> PLAY AGAIN
                 </button>
-                <button id="menuCompleteBtn" class="complete-btn">
+                <button id="backToMenuCompleteBtn" class="complete-btn">
                     <i class="fas fa-home"></i> MAIN MENU
                 </button>
             </div>
@@ -648,148 +489,53 @@
     <div id="settingsScreen" class="screen hidden">
         <div class="settings-content">
             <div class="settings-header">
-                <h1><i class="fas fa-cog"></i> GAME SETTINGS</h1>
+                <h1><i class="fas fa-cog"></i> SETTINGS</h1>
             </div>
             
-            <div class="settings-tabs">
-                <button class="tab-btn active" data-tab="graphics">Graphics</button>
-                <button class="tab-btn" data-tab="audio">Audio</button>
-                <button class="tab-btn" data-tab="controls">Controls</button>
-                <button class="tab-btn" data-tab="gameplay">Gameplay</button>
-            </div>
-            
-            <div class="settings-body">
-                <div id="graphicsTab" class="tab-content active">
-                    <div class="setting-group">
-                        <label>Graphics Quality</label>
-                        <select id="graphicsQuality">
-                            <option value="low">Low (Mobile)</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                            <option value="ultra">Ultra</option>
-                        </select>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="postProcessing" checked>
-                            Post Processing Effects
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="bloomEffect" checked>
-                            Bloom Lighting
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="particleEffects" checked>
-                            Particle Effects
-                        </label>
-                    </div>
+            <div class="settings-section">
+                <h3><i class="fas fa-sliders-h"></i> GAMEPLAY</h3>
+                <div class="setting">
+                    <label>Difficulty</label>
+                    <select id="difficultySelect">
+                        <option value="easy">Easy</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="hard">Hard</option>
+                    </select>
                 </div>
-                
-                <div id="audioTab" class="tab-content">
-                    <div class="setting-group">
-                        <label>Master Volume</label>
-                        <input type="range" id="masterVolume" min="0" max="100" value="80">
-                    </div>
-                    <div class="setting-group">
-                        <label>Music Volume</label>
-                        <input type="range" id="musicVolume" min="0" max="100" value="70">
-                    </div>
-                    <div class="setting-group">
-                        <label>SFX Volume</label>
-                        <input type="range" id="sfxVolume" min="0" max="100" value="90">
-                    </div>
-                    <div class="setting-group">
-                        <label>Voiceover Volume</label>
-                        <input type="range" id="voiceVolume" min="0" max="100" value="100">
-                    </div>
-                </div>
-                
-                <div id="controlsTab" class="tab-content">
-                    <div class="setting-group">
-                        <label>Control Sensitivity</label>
-                        <input type="range" id="controlSensitivity" min="1" max="10" value="5">
-                    </div>
-                    <div class="setting-group">
-                        <label>Invert Y-Axis</label>
-                        <select id="invertYAxis">
-                            <option value="false">No</option>
-                            <option value="true">Yes</option>
-                        </select>
-                    </div>
-                    <div class="setting-group">
-                        <label>Auto-Aim Assist</label>
-                        <select id="autoAim">
-                            <option value="off">Off</option>
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="gameplayTab" class="tab-content">
-                    <div class="setting-group">
-                        <label>Difficulty Level</label>
-                        <select id="difficulty">
-                            <option value="easy">Easy</option>
-                            <option value="normal" selected>Normal</option>
-                            <option value="hard">Hard</option>
-                            <option value="expert">Expert</option>
-                        </select>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="tutorials" checked>
-                            Show Tutorials
-                        </label>
-                    </div>
-                    <div class="setting-group">
-                        <label>
-                            <input type="checkbox" id="damageNumbers" checked>
-                            Show Damage Numbers
-                        </label>
-                    </div>
+                <div class="setting">
+                    <label>
+                        <input type="checkbox" id="autoAimCheck" checked>
+                        Auto Aim Assist
+                    </label>
                 </div>
             </div>
             
-            <div class="settings-footer">
-                <button id="saveSettings" class="settings-btn primary">
-                    <i class="fas fa-save"></i> SAVE SETTINGS
+            <div class="settings-section">
+                <h3><i class="fas fa-volume-up"></i> AUDIO</h3>
+                <div class="setting">
+                    <label>Master Volume</label>
+                    <input type="range" id="masterVolume" min="0" max="100" value="80">
+                </div>
+                <div class="setting">
+                    <label>Music Volume</label>
+                    <input type="range" id="musicVolume" min="0" max="100" value="70">
+                </div>
+                <div class="setting">
+                    <label>SFX Volume</label>
+                    <input type="range" id="sfxVolume" min="0" max="100" value="90">
+                </div>
+            </div>
+            
+            <div class="settings-buttons">
+                <button id="saveSettingsBtn" class="settings-btn primary">
+                    <i class="fas fa-save"></i> SAVE & CLOSE
                 </button>
-                <button id="defaultSettings" class="settings-btn">
-                    <i class="fas fa-undo"></i> DEFAULT SETTINGS
-                </button>
-                <button id="closeSettings" class="settings-btn">
+                <button id="closeSettingsBtn" class="settings-btn">
                     <i class="fas fa-times"></i> CLOSE
                 </button>
             </div>
         </div>
     </div>
-    
-    <!-- Audio Elements -->
-    <audio id="backgroundMusic" loop>
-        <source src="https://assets.mixkit.co/music/preview/mixkit-game-show-suspense-waiting-667.mp3" type="audio/mpeg">
-    </audio>
-    
-    <audio id="laserSound">
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-laser-weapon-shot-1671.mp3" type="audio/mpeg">
-    </audio>
-    
-    <audio id="missileSound">
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-missile-woosh-1095.mp3" type="audio/mpeg">
-    </audio>
-    
-    <audio id="explosionSound">
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-battle-explosion-2807.mp3" type="audio/mpeg">
-    </audio>
-    
-    <audio id="engineSound" loop>
-        <source src="https://assets.mixkit.co/sfx/preview/mixkit-spaceship-engine-1005.mp3" type="audio/mpeg">
-    </audio>
     
     <!-- Game Script -->
     <script src="script.js"></script>
