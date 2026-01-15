@@ -92,6 +92,7 @@ let bloomPass;
 let keys = {};
 let mouse = { x: 0, y: 0, down: false };
 let isBoosting = false;
+let animationFrameId = null;
 
 // Initialize Game
 function initGame() {
@@ -177,32 +178,46 @@ function showScreen(screenName) {
 function initThreeJS() {
     console.log("Initializing Three.js...");
     
-    // Create scene
-    scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000011, 100, 2000);
-    
-    // Create camera
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
-    camera.position.set(0, 10, 50);
-    
-    // Create renderer
-    renderer = new THREE.WebGLRenderer({ 
-        antialias: true, 
-        alpha: true,
-        powerPreference: "high-performance"
-    });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = CONFIG.SHADOWS;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    
-    document.getElementById('gameContainer').appendChild(renderer.domElement);
-    
-    // Setup lighting
-    setupLighting();
-    
-    // Create stars background
-    createStarfield();
+    try {
+        // Create scene
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x000011, 100, 2000);
+        
+        // Create camera
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 10, 50);
+        camera.lookAt(0, 0, 0);
+        
+        // Create renderer
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            alpha: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = CONFIG.SHADOWS;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
+        
+        const gameContainer = document.getElementById('gameContainer');
+        if (gameContainer) {
+            gameContainer.innerHTML = ''; // Clear previous canvas if exists
+            gameContainer.appendChild(renderer.domElement);
+        }
+        
+        // Setup lighting
+        setupLighting();
+        
+        // Create stars background
+        createStarfield();
+        
+        console.log("Three.js initialized successfully!");
+    } catch (error) {
+        console.error("Error initializing Three.js:", error);
+    }
     
     // Handle window resize
     window.addEventListener('resize', onWindowResize);
@@ -230,232 +245,258 @@ function setupLighting() {
 }
 
 function createStarfield() {
-    const starGeometry = new THREE.BufferGeometry();
-    const starCount = 5000;
-    const positions = new Float32Array(starCount * 3);
-    const colors = new Float32Array(starCount * 3);
-    
-    for (let i = 0; i < starCount * 3; i += 3) {
-        // Position
-        positions[i] = (Math.random() - 0.5) * 2000;
-        positions[i + 1] = (Math.random() - 0.5) * 2000;
-        positions[i + 2] = (Math.random() - 0.5) * 2000;
+    try {
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 5000;
+        const positions = new Float32Array(starCount * 3);
+        const colors = new Float32Array(starCount * 3);
         
-        // Color
-        const color = new THREE.Color();
-        color.setHSL(Math.random(), 0.5, 0.5 + Math.random() * 0.5);
-        colors[i] = color.r;
-        colors[i + 1] = color.g;
-        colors[i + 2] = color.b;
+        for (let i = 0; i < starCount * 3; i += 3) {
+            // Position
+            positions[i] = (Math.random() - 0.5) * 2000;
+            positions[i + 1] = (Math.random() - 0.5) * 2000;
+            positions[i + 2] = (Math.random() - 0.5) * 2000;
+            
+            // Color
+            const color = new THREE.Color();
+            color.setHSL(Math.random(), 0.5, 0.5 + Math.random() * 0.5);
+            colors[i] = color.r;
+            colors[i + 1] = color.g;
+            colors[i + 2] = color.b;
+        }
+        
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        const starMaterial = new THREE.PointsMaterial({
+            size: 0.7,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+        return stars;
+    } catch (error) {
+        console.error("Error creating starfield:", error);
+        return null;
     }
-    
-    starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    
-    const starMaterial = new THREE.PointsMaterial({
-        size: 0.7,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.8
-    });
-    
-    const stars = new THREE.Points(starGeometry, starMaterial);
-    scene.add(stars);
 }
 
 function createPlayerShip() {
-    const group = new THREE.Group();
-    
-    // Ship body
-    const bodyGeometry = new THREE.ConeGeometry(2, 6, 8);
-    const bodyMaterial = new THREE.MeshPhongMaterial({
-        color: 0x0080ff,
-        shininess: 100,
-        emissive: 0x002244,
-        emissiveIntensity: 0.3
-    });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.rotation.x = Math.PI / 2;
-    body.castShadow = true;
-    group.add(body);
-    
-    // Cockpit
-    const cockpitGeometry = new THREE.SphereGeometry(1.5, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-    const cockpitMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0x00ffff,
-        transmission: 0.7,
-        thickness: 0.5,
-        roughness: 0.1
-    });
-    const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
-    cockpit.position.y = 0.8;
-    group.add(cockpit);
-    
-    // Wings
-    const wingGeometry = new THREE.BoxGeometry(5, 0.3, 2);
-    const wingMaterial = new THREE.MeshPhongMaterial({
-        color: 0x0044aa,
-        emissive: 0x001122,
-        emissiveIntensity: 0.2
-    });
-    
-    const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    leftWing.position.set(-3, 0, -2);
-    leftWing.castShadow = true;
-    group.add(leftWing);
-    
-    const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    rightWing.position.set(3, 0, -2);
-    rightWing.castShadow = true;
-    group.add(rightWing);
-    
-    // Engine glow
-    const engineGlow = new THREE.PointLight(0xffff00, 2, 50);
-    engineGlow.position.set(0, 0, -3);
-    group.add(engineGlow);
-    
-    group.position.set(0, 0, 0);
-    scene.add(group);
-    
-    playerShip = {
-        mesh: group,
-        velocity: new THREE.Vector3(0, 0, 0),
-        speed: 0,
-        maxSpeed: CONFIG.PLAYER_SPEED,
-        rotationSpeed: CONFIG.PLAYER_ROTATION_SPEED,
-        engineLight: engineGlow
-    };
-    
-    // Set camera to follow player
-    camera.position.set(0, 15, 30);
-    camera.lookAt(playerShip.mesh.position);
+    try {
+        const group = new THREE.Group();
+        
+        // Ship body
+        const bodyGeometry = new THREE.ConeGeometry(2, 6, 8);
+        const bodyMaterial = new THREE.MeshPhongMaterial({
+            color: 0x0080ff,
+            shininess: 100,
+            emissive: 0x002244,
+            emissiveIntensity: 0.3
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.rotation.x = Math.PI / 2;
+        body.castShadow = true;
+        group.add(body);
+        
+        // Cockpit
+        const cockpitGeometry = new THREE.SphereGeometry(1.5, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const cockpitMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x00ffff,
+            transmission: 0.7,
+            thickness: 0.5,
+            roughness: 0.1
+        });
+        const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+        cockpit.position.y = 0.8;
+        group.add(cockpit);
+        
+        // Wings
+        const wingGeometry = new THREE.BoxGeometry(5, 0.3, 2);
+        const wingMaterial = new THREE.MeshPhongMaterial({
+            color: 0x0044aa,
+            emissive: 0x001122,
+            emissiveIntensity: 0.2
+        });
+        
+        const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        leftWing.position.set(-3, 0, -2);
+        leftWing.castShadow = true;
+        group.add(leftWing);
+        
+        const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+        rightWing.position.set(3, 0, -2);
+        rightWing.castShadow = true;
+        group.add(rightWing);
+        
+        // Engine glow
+        const engineGlow = new THREE.PointLight(0xffff00, 2, 50);
+        engineGlow.position.set(0, 0, -3);
+        group.add(engineGlow);
+        
+        group.position.set(0, 0, 0);
+        scene.add(group);
+        
+        playerShip = {
+            mesh: group,
+            velocity: new THREE.Vector3(0, 0, 0),
+            speed: 0,
+            maxSpeed: CONFIG.PLAYER_SPEED,
+            rotationSpeed: CONFIG.PLAYER_ROTATION_SPEED,
+            engineLight: engineGlow
+        };
+        
+        console.log("Player ship created successfully!");
+        return playerShip;
+    } catch (error) {
+        console.error("Error creating player ship:", error);
+        return null;
+    }
 }
 
 function createWaypoints() {
     waypoints = [];
     
     for (let i = 0; i < CONFIG.TOTAL_WAYPOINTS; i++) {
-        const waypoint = new THREE.Mesh(
-            new THREE.SphereGeometry(20, 32, 32),
-            new THREE.MeshBasicMaterial({
-                color: i === 0 ? 0x00ff00 : 0x0088ff,
-                transparent: true,
-                opacity: 0.5,
-                wireframe: true
-            })
-        );
-        
-        // Position waypoints in a line
-        waypoint.position.set(
-            (Math.random() - 0.5) * 200,
-            (Math.random() - 0.5) * 100,
-            -(i + 1) * CONFIG.WAYPOINT_DISTANCE
-        );
-        
-        waypoint.userData = {
-            isWaypoint: true,
-            index: i + 1,
-            reached: false
-        };
-        
-        // Add glow effect
-        const glow = new THREE.PointLight(i === 0 ? 0x00ff00 : 0x0088ff, 2, 200);
-        glow.position.copy(waypoint.position);
-        scene.add(glow);
-        
-        scene.add(waypoint);
-        waypoints.push(waypoint);
-        
-        // Create enemy patrols near waypoints
-        createEnemyPatrol(waypoint.position, 3);
+        try {
+            const waypoint = new THREE.Mesh(
+                new THREE.SphereGeometry(20, 32, 32),
+                new THREE.MeshBasicMaterial({
+                    color: i === 0 ? 0x00ff00 : 0x0088ff,
+                    transparent: true,
+                    opacity: 0.5,
+                    wireframe: true
+                })
+            );
+            
+            // Position waypoints in a line
+            waypoint.position.set(
+                (Math.random() - 0.5) * 200,
+                (Math.random() - 0.5) * 100,
+                -(i + 1) * CONFIG.WAYPOINT_DISTANCE
+            );
+            
+            waypoint.userData = {
+                isWaypoint: true,
+                index: i + 1,
+                reached: false
+            };
+            
+            // Add glow effect
+            const glow = new THREE.PointLight(i === 0 ? 0x00ff00 : 0x0088ff, 2, 200);
+            glow.position.copy(waypoint.position);
+            scene.add(glow);
+            
+            scene.add(waypoint);
+            waypoints.push(waypoint);
+            
+            // Create enemy patrols near waypoints
+            createEnemyPatrol(waypoint.position, 3);
+        } catch (error) {
+            console.error(`Error creating waypoint ${i}:`, error);
+        }
     }
+    console.log(`Created ${waypoints.length} waypoints`);
 }
 
 function createEnemyPatrol(position, count) {
     for (let i = 0; i < count; i++) {
         const enemy = createEnemyShip();
-        enemy.position.set(
-            position.x + (Math.random() - 0.5) * 300,
-            position.y + (Math.random() - 0.5) * 150,
-            position.z + (Math.random() - 0.5) * 300
-        );
-        
-        scene.add(enemy);
-        enemies.push(enemy);
+        if (enemy) {
+            enemy.position.set(
+                position.x + (Math.random() - 0.5) * 300,
+                position.y + (Math.random() - 0.5) * 150,
+                position.z + (Math.random() - 0.5) * 300
+            );
+            
+            scene.add(enemy);
+            enemies.push(enemy);
+        }
     }
 }
 
 function createEnemyShip() {
-    const group = new THREE.Group();
-    
-    // Enemy ship body (flying saucer)
-    const bodyGeometry = new THREE.CylinderGeometry(3, 2, 1, 16);
-    const bodyMaterial = new THREE.MeshPhongMaterial({
-        color: 0xff0000,
-        emissive: 0x440000,
-        emissiveIntensity: 0.3
-    });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    group.add(body);
-    
-    // Dome
-    const domeGeometry = new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-    const domeMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0xff5555,
-        transmission: 0.4,
-        thickness: 0.3
-    });
-    const dome = new THREE.Mesh(domeGeometry, domeMaterial);
-    dome.position.y = 0.5;
-    group.add(dome);
-    
-    // Engine glow
-    const engineLight = new THREE.PointLight(0xff0000, 1, 50);
-    engineLight.position.set(0, -0.5, 0);
-    group.add(engineLight);
-    
-    // Add to scene
-    const enemy = group;
-    enemy.userData = {
-        isEnemy: true,
-        health: 100,
-        maxHealth: 100,
-        speed: CONFIG.ENEMY_SPEED,
-        fireRate: CONFIG.ENEMY_FIRE_RATE,
-        lastFire: 0,
-        target: null
-    };
-    
-    return enemy;
+    try {
+        const group = new THREE.Group();
+        
+        // Enemy ship body (flying saucer)
+        const bodyGeometry = new THREE.CylinderGeometry(3, 2, 1, 16);
+        const bodyMaterial = new THREE.MeshPhongMaterial({
+            color: 0xff0000,
+            emissive: 0x440000,
+            emissiveIntensity: 0.3
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        group.add(body);
+        
+        // Dome
+        const domeGeometry = new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        const domeMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xff5555,
+            transmission: 0.4,
+            thickness: 0.3
+        });
+        const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+        dome.position.y = 0.5;
+        group.add(dome);
+        
+        // Engine glow
+        const engineLight = new THREE.PointLight(0xff0000, 1, 50);
+        engineLight.position.set(0, -0.5, 0);
+        group.add(engineLight);
+        
+        // Add to scene
+        const enemy = group;
+        enemy.userData = {
+            isEnemy: true,
+            health: 100,
+            maxHealth: 100,
+            speed: CONFIG.ENEMY_SPEED,
+            fireRate: CONFIG.ENEMY_FIRE_RATE,
+            lastFire: 0,
+            target: null
+        };
+        
+        return enemy;
+    } catch (error) {
+        console.error("Error creating enemy ship:", error);
+        return null;
+    }
 }
 
 function createAsteroidField() {
     asteroids = [];
     
     for (let i = 0; i < 50; i++) {
-        const size = Math.random() * 10 + 5;
-        const geometry = new THREE.SphereGeometry(size, 8, 8);
-        const material = new THREE.MeshPhongMaterial({
-            color: 0x888888,
-            emissive: 0x222222,
-            emissiveIntensity: 0.1
-        });
-        
-        const asteroid = new THREE.Mesh(geometry, material);
-        
-        asteroid.position.set(
-            (Math.random() - 0.5) * 1000,
-            (Math.random() - 0.5) * 500,
-            -(Math.random() * 5000)
-        );
-        
-        asteroid.userData = {
-            isAsteroid: true,
-            size: size
-        };
-        
-        scene.add(asteroid);
-        asteroids.push(asteroid);
+        try {
+            const size = Math.random() * 10 + 5;
+            const geometry = new THREE.SphereGeometry(size, 8, 8);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x888888,
+                emissive: 0x222222,
+                emissiveIntensity: 0.1
+            });
+            
+            const asteroid = new THREE.Mesh(geometry, material);
+            
+            asteroid.position.set(
+                (Math.random() - 0.5) * 1000,
+                (Math.random() - 0.5) * 500,
+                -(Math.random() * 5000)
+            );
+            
+            asteroid.userData = {
+                isAsteroid: true,
+                size: size
+            };
+            
+            scene.add(asteroid);
+            asteroids.push(asteroid);
+        } catch (error) {
+            console.error("Error creating asteroid:", error);
+        }
     }
 }
 
@@ -463,116 +504,139 @@ function createHealthPacks() {
     healthPacks = [];
     
     for (let i = 0; i < 10; i++) {
-        const geometry = new THREE.SphereGeometry(5, 16, 16);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0x00ff00,
-            transparent: true,
-            opacity: 0.7
-        });
-        
-        const healthPack = new THREE.Mesh(geometry, material);
-        
-        healthPack.position.set(
-            (Math.random() - 0.5) * 800,
-            (Math.random() - 0.5) * 400,
-            -(Math.random() * 4000 + 500)
-        );
-        
-        healthPack.userData = {
-            isHealthPack: true,
-            value: 20
-        };
-        
-        scene.add(healthPack);
-        healthPacks.push(healthPack);
+        try {
+            const geometry = new THREE.SphereGeometry(5, 16, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            const healthPack = new THREE.Mesh(geometry, material);
+            
+            healthPack.position.set(
+                (Math.random() - 0.5) * 800,
+                (Math.random() - 0.5) * 400,
+                -(Math.random() * 4000 + 500)
+            );
+            
+            healthPack.userData = {
+                isHealthPack: true,
+                value: 20
+            };
+            
+            scene.add(healthPack);
+            healthPacks.push(healthPack);
+        } catch (error) {
+            console.error("Error creating health pack:", error);
+        }
     }
 }
 
 function setupEventListeners() {
     console.log("Setting up event listeners...");
     
-    // Keyboard controls
-    document.addEventListener('keydown', (e) => {
-        keys[e.code] = true;
+    try {
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            // Handle special keys
+            switch(e.code) {
+                case 'Escape':
+                    togglePause();
+                    break;
+                case 'Space':
+                    isBoosting = true;
+                    break;
+                case 'KeyR':
+                    if (gameState.missionStarted && !gameState.isPaused) {
+                        fireMissile();
+                    }
+                    break;
+                case 'KeyB':
+                    if (gameState.missionStarted && !gameState.isPaused) {
+                        fireBomb();
+                    }
+                    break;
+            }
+        });
         
-        // Handle special keys
-        switch(e.code) {
-            case 'Escape':
-                togglePause();
-                break;
-            case 'Space':
-                isBoosting = true;
-                break;
-            case 'KeyR':
-                fireMissile();
-                break;
-            case 'KeyB':
-                fireBomb();
-                break;
-        }
-    });
-    
-    document.addEventListener('keyup', (e) => {
-        keys[e.code] = false;
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            
+            if (e.code === 'Space') {
+                isBoosting = false;
+            }
+        });
         
-        if (e.code === 'Space') {
-            isBoosting = false;
-        }
-    });
-    
-    // Mouse controls
-    document.addEventListener('mousedown', (e) => {
-        mouse.down = true;
-        if (e.button === 0) { // Left click
-            fireBullet();
-        } else if (e.button === 2) { // Right click
-            fireBomb();
-        }
-    });
-    
-    document.addEventListener('mouseup', (e) => {
-        mouse.down = false;
-    });
-    
-    document.addEventListener('mousemove', (e) => {
-        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    });
-    
-    // UI Button Events
-    document.getElementById('newGameBtn').addEventListener('click', startNewGame);
-    document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlay'));
-    document.getElementById('backToMenuBtn').addEventListener('click', () => showScreen('mainMenu'));
-    document.getElementById('settingsBtn').addEventListener('click', () => showScreen('settings'));
-    document.getElementById('closeSettingsBtn').addEventListener('click', () => showScreen('mainMenu'));
-    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
-    document.getElementById('retryBtn').addEventListener('click', startNewGame);
-    document.getElementById('quitToMenuBtn').addEventListener('click', () => showScreen('mainMenu'));
-    document.getElementById('playAgainBtn').addEventListener('click', startNewGame);
-    document.getElementById('backToMenuCompleteBtn').addEventListener('click', () => showScreen('mainMenu'));
-    document.getElementById('continueMissionBtn').addEventListener('click', continueMission);
-    document.getElementById('useDroneBtn').addEventListener('click', deployDrone);
-    document.getElementById('useNukeBtn').addEventListener('click', useNuclearBomb);
-    
-    // Close performance warning
-    document.getElementById('closePerfWarning').addEventListener('click', () => {
-        document.getElementById('perfWarning').classList.add('hidden');
-    });
-    
-    // Prevent context menu on right click
-    document.addEventListener('contextmenu', (e) => e.preventDefault());
+        // Mouse controls
+        document.addEventListener('mousedown', (e) => {
+            mouse.down = true;
+            if (gameState.missionStarted && !gameState.isPaused) {
+                if (e.button === 0) { // Left click
+                    fireBullet();
+                } else if (e.button === 2) { // Right click
+                    fireBomb();
+                }
+            }
+        });
+        
+        document.addEventListener('mouseup', (e) => {
+            mouse.down = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+        
+        // UI Button Events
+        document.getElementById('newGameBtn').addEventListener('click', startNewGame);
+        document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlay'));
+        document.getElementById('backToMenuBtn').addEventListener('click', () => showScreen('mainMenu'));
+        document.getElementById('settingsBtn').addEventListener('click', () => showScreen('settings'));
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => showScreen('mainMenu'));
+        document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+        document.getElementById('retryBtn').addEventListener('click', startNewGame);
+        document.getElementById('quitToMenuBtn').addEventListener('click', () => {
+            stopGameLoop();
+            showScreen('mainMenu');
+        });
+        document.getElementById('playAgainBtn').addEventListener('click', startNewGame);
+        document.getElementById('backToMenuCompleteBtn').addEventListener('click', () => {
+            stopGameLoop();
+            showScreen('mainMenu');
+        });
+        document.getElementById('continueMissionBtn').addEventListener('click', continueMission);
+        document.getElementById('useDroneBtn').addEventListener('click', deployDrone);
+        document.getElementById('useNukeBtn').addEventListener('click', useNuclearBomb);
+        
+        // Close performance warning
+        document.getElementById('closePerfWarning').addEventListener('click', () => {
+            document.getElementById('perfWarning').classList.add('hidden');
+        });
+        
+        // Prevent context menu on right click
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        console.log("Event listeners setup complete!");
+    } catch (error) {
+        console.error("Error setting up event listeners:", error);
+    }
 }
 
 function startNewGame() {
     console.log("Starting new game...");
     
+    // Stop any existing game loop
+    stopGameLoop();
+    
     // Reset game state
     resetGameState();
     
     // Clear scene
-    while(scene.children.length > 0) {
-        scene.remove(scene.children[0]);
-    }
+    clearScene();
     
     // Reinitialize scene
     setupLighting();
@@ -590,10 +654,14 @@ function startNewGame() {
     document.getElementById('mainMenu').classList.add('hidden');
     document.getElementById('gameOverScreen').classList.add('hidden');
     document.getElementById('missionCompleteScreen').classList.add('hidden');
+    document.getElementById('finalBattleHUD').classList.add('hidden');
+    document.getElementById('congratulationsPopup').classList.add('hidden');
     
     // Start mission
     gameState.missionStarted = true;
     gameState.currentWaypoint = 1;
+    gameState.isPaused = false;
+    gameState.isGameOver = false;
     
     // Update HUD
     updateHUD();
@@ -603,6 +671,49 @@ function startNewGame() {
     if (!gameState.isPaused) {
         animate();
     }
+    
+    console.log("New game started!");
+}
+
+function clearScene() {
+    try {
+        // Remove all objects from scene
+        while(scene.children.length > 0) {
+            const object = scene.children[0];
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => material.dispose());
+                } else {
+                    object.material.dispose();
+                }
+            }
+            scene.remove(object);
+        }
+        
+        // Clear arrays
+        waypoints = [];
+        enemies = [];
+        asteroids = [];
+        healthPacks = [];
+        bullets = [];
+        bombs = [];
+        missiles = [];
+        
+        playerShip = null;
+        
+        console.log("Scene cleared");
+    } catch (error) {
+        console.error("Error clearing scene:", error);
+    }
+}
+
+function stopGameLoop() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    console.log("Game loop stopped");
 }
 
 function resetGameState() {
@@ -642,334 +753,397 @@ function resetGameState() {
             outerLayerDestroyed: false,
             innerLayerDestroyed: false,
             coreDestroyed: false
+        },
+        
+        settings: {
+            difficulty: localStorage.getItem('galacticWarDifficulty') || 'normal',
+            masterVolume: parseFloat(localStorage.getItem('galacticWarMasterVolume') || '0.8'),
+            musicVolume: parseFloat(localStorage.getItem('galacticWarMusicVolume') || '0.7'),
+            sfxVolume: parseFloat(localStorage.getItem('galacticWarSfxVolume') || '0.9'),
+            autoAim: localStorage.getItem('galacticWarAutoAim') === 'true' || true
         }
     };
+    console.log("Game state reset");
 }
 
 function togglePause() {
     gameState.isPaused = !gameState.isPaused;
     
     if (gameState.isPaused) {
-        // Show pause menu (to be implemented)
+        console.log("Game paused");
+        stopGameLoop();
     } else {
-        // Resume game
+        console.log("Game resumed");
         animate();
     }
 }
 
 function updatePlayerMovement() {
-    if (!playerShip || gameState.isPaused) return;
+    if (!playerShip || !playerShip.mesh || gameState.isPaused) return;
     
-    // Calculate movement direction based on keys
-    const moveVector = new THREE.Vector3(0, 0, 0);
-    
-    if (keys['KeyW'] || keys['ArrowUp']) {
-        moveVector.z -= 1;
-    }
-    if (keys['KeyS'] || keys['ArrowDown']) {
-        moveVector.z += 1;
-    }
-    if (keys['KeyA'] || keys['ArrowLeft']) {
-        moveVector.x -= 1;
-    }
-    if (keys['KeyD'] || keys['ArrowRight']) {
-        moveVector.x += 1;
-    }
-    
-    // Normalize and apply speed
-    if (moveVector.length() > 0) {
-        moveVector.normalize();
-    }
-    
-    // Apply boost
-    const speedMultiplier = isBoosting ? CONFIG.PLAYER_BOOST_MULTIPLIER : 1;
-    moveVector.multiplyScalar(CONFIG.PLAYER_SPEED * speedMultiplier * deltaTime);
-    
-    // Update player position
-    playerShip.mesh.position.add(moveVector);
-    playerShip.velocity.copy(moveVector);
-    playerShip.speed = playerShip.velocity.length();
-    
-    // Apply mouse rotation
-    const rotationSpeed = 0.01;
-    playerShip.mesh.rotation.y = -mouse.x * Math.PI * 0.5;
-    playerShip.mesh.rotation.x = mouse.y * Math.PI * 0.25;
-    
-    // Update camera position
-    const cameraOffset = new THREE.Vector3(0, 15, 30);
-    cameraOffset.applyQuaternion(playerShip.mesh.quaternion);
-    camera.position.copy(playerShip.mesh.position).add(cameraOffset);
-    camera.lookAt(playerShip.mesh.position);
-    
-    // Update game state
-    gameState.player.position = {
-        x: playerShip.mesh.position.x,
-        y: playerShip.mesh.position.y,
-        z: playerShip.mesh.position.z
-    };
-    
-    gameState.player.distance = Math.abs(playerShip.mesh.position.z);
-    
-    // Update engine light intensity based on speed
-    if (playerShip.engineLight) {
-        playerShip.engineLight.intensity = 1 + playerShip.speed / CONFIG.PLAYER_SPEED;
+    try {
+        // Calculate movement direction based on keys
+        const moveVector = new THREE.Vector3(0, 0, 0);
+        
+        if (keys['KeyW'] || keys['ArrowUp']) {
+            moveVector.z -= 1;
+        }
+        if (keys['KeyS'] || keys['ArrowDown']) {
+            moveVector.z += 1;
+        }
+        if (keys['KeyA'] || keys['ArrowLeft']) {
+            moveVector.x -= 1;
+        }
+        if (keys['KeyD'] || keys['ArrowRight']) {
+            moveVector.x += 1;
+        }
+        
+        // Normalize and apply speed
+        if (moveVector.length() > 0) {
+            moveVector.normalize();
+        }
+        
+        // Apply boost
+        const speedMultiplier = isBoosting ? CONFIG.PLAYER_BOOST_MULTIPLIER : 1;
+        moveVector.multiplyScalar(CONFIG.PLAYER_SPEED * speedMultiplier * deltaTime);
+        
+        // Update player position
+        playerShip.mesh.position.add(moveVector);
+        playerShip.velocity.copy(moveVector);
+        playerShip.speed = playerShip.velocity.length();
+        
+        // Apply mouse rotation
+        const rotationSpeed = 0.01;
+        playerShip.mesh.rotation.y = -mouse.x * Math.PI * 0.5;
+        playerShip.mesh.rotation.x = mouse.y * Math.PI * 0.25;
+        
+        // Update camera position
+        const cameraOffset = new THREE.Vector3(0, 15, 30);
+        cameraOffset.applyQuaternion(playerShip.mesh.quaternion);
+        camera.position.copy(playerShip.mesh.position).add(cameraOffset);
+        camera.lookAt(playerShip.mesh.position);
+        
+        // Update game state
+        gameState.player.position = {
+            x: playerShip.mesh.position.x,
+            y: playerShip.mesh.position.y,
+            z: playerShip.mesh.position.z
+        };
+        
+        gameState.player.distance = Math.abs(playerShip.mesh.position.z);
+        
+        // Update engine light intensity based on speed
+        if (playerShip.engineLight) {
+            playerShip.engineLight.intensity = 1 + playerShip.speed / CONFIG.PLAYER_SPEED;
+        }
+    } catch (error) {
+        console.error("Error updating player movement:", error);
     }
 }
 
 function updateEnemies() {
+    if (!playerShip || !playerShip.mesh) return;
+    
     enemies.forEach((enemy, index) => {
-        if (!enemy.userData) return;
+        if (!enemy.userData || !enemy.position) return;
         
-        // Move towards player
-        const direction = new THREE.Vector3();
-        direction.subVectors(playerShip.mesh.position, enemy.position).normalize();
-        
-        // Add some random movement
-        direction.x += (Math.random() - 0.5) * 0.2;
-        direction.y += (Math.random() - 0.5) * 0.2;
-        direction.normalize();
-        
-        enemy.position.add(direction.multiplyScalar(enemy.userData.speed * deltaTime));
-        
-        // Face the player
-        enemy.lookAt(playerShip.mesh.position);
-        
-        // Fire at player
-        const now = Date.now();
-        if (now - enemy.userData.lastFire > enemy.userData.fireRate) {
-            fireEnemyWeapon(enemy);
-            enemy.userData.lastFire = now;
+        try {
+            // Move towards player
+            const direction = new THREE.Vector3();
+            direction.subVectors(playerShip.mesh.position, enemy.position).normalize();
+            
+            // Add some random movement
+            direction.x += (Math.random() - 0.5) * 0.2;
+            direction.y += (Math.random() - 0.5) * 0.2;
+            direction.normalize();
+            
+            enemy.position.add(direction.multiplyScalar(enemy.userData.speed * deltaTime));
+            
+            // Face the player
+            enemy.lookAt(playerShip.mesh.position);
+            
+            // Fire at player
+            const now = Date.now();
+            if (now - enemy.userData.lastFire > enemy.userData.fireRate) {
+                fireEnemyWeapon(enemy);
+                enemy.userData.lastFire = now;
+            }
+            
+            // Check collision with player bullets
+            checkEnemyCollisions(enemy, index);
+        } catch (error) {
+            console.error("Error updating enemy:", error, enemy);
         }
-        
-        // Check collision with player bullets
-        checkEnemyCollisions(enemy, index);
     });
 }
 
 function fireEnemyWeapon(enemy) {
-    const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff5555 })
-    );
+    if (!enemy || !enemy.position) return;
     
-    bullet.position.copy(enemy.position);
-    
-    // Calculate direction to player
-    const direction = new THREE.Vector3();
-    direction.subVectors(playerShip.mesh.position, enemy.position).normalize();
-    
-    bullet.userData = {
-        isEnemyBullet: true,
-        damage: CONFIG.ENEMY_DAMAGE,
-        velocity: direction.multiplyScalar(50),
-        life: 3
-    };
-    
-    scene.add(bullet);
-    bullets.push(bullet);
+    try {
+        const bullet = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0xff5555 })
+        );
+        
+        bullet.position.copy(enemy.position);
+        
+        // Calculate direction to player
+        const direction = new THREE.Vector3();
+        direction.subVectors(playerShip.mesh.position, enemy.position).normalize();
+        
+        bullet.userData = {
+            isEnemyBullet: true,
+            damage: CONFIG.ENEMY_DAMAGE,
+            velocity: direction.multiplyScalar(50),
+            life: 3
+        };
+        
+        scene.add(bullet);
+        bullets.push(bullet);
+    } catch (error) {
+        console.error("Error firing enemy weapon:", error);
+    }
 }
 
 function fireBullet() {
-    if (!gameState.missionStarted || gameState.isPaused) return;
+    if (!gameState.missionStarted || gameState.isPaused || !playerShip) return;
     
-    const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0x00ffff })
-    );
-    
-    // Position bullet in front of ship
-    const bulletPosition = playerShip.mesh.position.clone();
-    const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(playerShip.mesh.quaternion);
-    bulletPosition.add(forward.multiplyScalar(5));
-    
-    bullet.position.copy(bulletPosition);
-    
-    // Calculate direction based on mouse position
-    const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
-    
-    bullet.userData = {
-        isPlayerBullet: true,
-        damage: 10,
-        velocity: direction.multiplyScalar(CONFIG.BULLET_SPEED),
-        life: 2
-    };
-    
-    scene.add(bullet);
-    bullets.push(bullet);
-    
-    // Create muzzle flash
-    createMuzzleFlash(bulletPosition);
+    try {
+        const bullet = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x00ffff })
+        );
+        
+        // Position bullet in front of ship
+        const bulletPosition = playerShip.mesh.position.clone();
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(playerShip.mesh.quaternion);
+        bulletPosition.add(forward.multiplyScalar(5));
+        
+        bullet.position.copy(bulletPosition);
+        
+        // Calculate direction based on mouse position
+        const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
+        
+        bullet.userData = {
+            isPlayerBullet: true,
+            damage: 10,
+            velocity: direction.multiplyScalar(CONFIG.BULLET_SPEED),
+            life: 2
+        };
+        
+        scene.add(bullet);
+        bullets.push(bullet);
+        
+        // Create muzzle flash
+        createMuzzleFlash(bulletPosition);
+    } catch (error) {
+        console.error("Error firing bullet:", error);
+    }
 }
 
 function fireBomb() {
-    if (!gameState.missionStarted || gameState.isPaused || gameState.weapons.bombs <= 0) return;
+    if (!gameState.missionStarted || gameState.isPaused || gameState.weapons.bombs <= 0 || !playerShip) return;
     
     gameState.weapons.bombs--;
     
-    const bomb = new THREE.Mesh(
-        new THREE.SphereGeometry(2, 16, 16),
-        new THREE.MeshBasicMaterial({ color: 0xff5500 })
-    );
-    
-    const bombPosition = playerShip.mesh.position.clone();
-    const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(playerShip.mesh.quaternion);
-    bombPosition.add(forward.multiplyScalar(5));
-    
-    bomb.position.copy(bombPosition);
-    
-    const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
-    
-    bomb.userData = {
-        isPlayerBomb: true,
-        damage: 50,
-        velocity: direction.multiplyScalar(CONFIG.BOMB_SPEED),
-        life: 3,
-        explosionRadius: 20
-    };
-    
-    scene.add(bomb);
-    bombs.push(bomb);
-    
-    // Start bomb reload timer
-    setTimeout(() => {
-        if (gameState.weapons.bombs < gameState.weapons.maxBombs) {
-            gameState.weapons.bombs++;
-            updateHUD();
-        }
-    }, CONFIG.BOMB_RELOAD_TIME);
+    try {
+        const bomb = new THREE.Mesh(
+            new THREE.SphereGeometry(2, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xff5500 })
+        );
+        
+        const bombPosition = playerShip.mesh.position.clone();
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(playerShip.mesh.quaternion);
+        bombPosition.add(forward.multiplyScalar(5));
+        
+        bomb.position.copy(bombPosition);
+        
+        const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
+        
+        bomb.userData = {
+            isPlayerBomb: true,
+            damage: 50,
+            velocity: direction.multiplyScalar(CONFIG.BOMB_SPEED),
+            life: 3,
+            explosionRadius: 20
+        };
+        
+        scene.add(bomb);
+        bombs.push(bomb);
+        
+        // Start bomb reload timer
+        setTimeout(() => {
+            if (gameState.weapons.bombs < gameState.weapons.maxBombs) {
+                gameState.weapons.bombs++;
+                updateHUD();
+            }
+        }, CONFIG.BOMB_RELOAD_TIME);
+        
+        updateHUD();
+    } catch (error) {
+        console.error("Error firing bomb:", error);
+    }
 }
 
 function fireMissile() {
-    if (!gameState.missionStarted || gameState.isPaused || gameState.weapons.missiles <= 0) return;
+    if (!gameState.missionStarted || gameState.isPaused || gameState.weapons.missiles <= 0 || !playerShip) return;
     
     gameState.weapons.missiles--;
     
-    const missile = new THREE.Mesh(
-        new THREE.ConeGeometry(1, 4, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff00ff })
-    );
-    missile.rotation.x = Math.PI / 2;
-    
-    const missilePosition = playerShip.mesh.position.clone();
-    const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(playerShip.mesh.quaternion);
-    missilePosition.add(forward.multiplyScalar(5));
-    
-    missile.position.copy(missilePosition);
-    
-    const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
-    
-    missile.userData = {
-        isPlayerMissile: true,
-        damage: 100,
-        velocity: direction.multiplyScalar(CONFIG.MISSILE_SPEED),
-        life: 4,
-        homing: true,
-        target: null
-    };
-    
-    // Find nearest enemy as target
-    if (enemies.length > 0) {
-        let nearestEnemy = null;
-        let nearestDistance = Infinity;
+    try {
+        const missile = new THREE.Mesh(
+            new THREE.ConeGeometry(1, 4, 8),
+            new THREE.MeshBasicMaterial({ color: 0xff00ff })
+        );
+        missile.rotation.x = Math.PI / 2;
         
-        enemies.forEach(enemy => {
-            const distance = missile.position.distanceTo(enemy.position);
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
-                nearestEnemy = enemy;
+        const missilePosition = playerShip.mesh.position.clone();
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(playerShip.mesh.quaternion);
+        missilePosition.add(forward.multiplyScalar(5));
+        
+        missile.position.copy(missilePosition);
+        
+        const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
+        
+        missile.userData = {
+            isPlayerMissile: true,
+            damage: 100,
+            velocity: direction.multiplyScalar(CONFIG.MISSILE_SPEED),
+            life: 4,
+            homing: true,
+            target: null
+        };
+        
+        // Find nearest enemy as target
+        if (enemies.length > 0) {
+            let nearestEnemy = null;
+            let nearestDistance = Infinity;
+            
+            enemies.forEach(enemy => {
+                const distance = missile.position.distanceTo(enemy.position);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestEnemy = enemy;
+                }
+            });
+            
+            if (nearestDistance < 200) {
+                missile.userData.target = nearestEnemy;
             }
-        });
+        }
         
-        if (nearestDistance < 200) {
-            missile.userData.target = nearestEnemy;
-        }
+        scene.add(missile);
+        missiles.push(missile);
+        
+        // Start missile reload timer
+        setTimeout(() => {
+            if (gameState.weapons.missiles < gameState.weapons.maxMissiles) {
+                gameState.weapons.missiles++;
+                updateHUD();
+            }
+        }, CONFIG.MISSILE_RELOAD_TIME);
+        
+        updateHUD();
+    } catch (error) {
+        console.error("Error firing missile:", error);
     }
-    
-    scene.add(missile);
-    missiles.push(missile);
-    
-    // Start missile reload timer
-    setTimeout(() => {
-        if (gameState.weapons.missiles < gameState.weapons.maxMissiles) {
-            gameState.weapons.missiles++;
-            updateHUD();
-        }
-    }, CONFIG.MISSILE_RELOAD_TIME);
 }
 
 function createMuzzleFlash(position) {
-    const flash = new THREE.PointLight(0xffff00, 5, 20);
-    flash.position.copy(position);
-    scene.add(flash);
-    
-    // Remove flash after short time
-    setTimeout(() => {
-        scene.remove(flash);
-    }, 50);
+    try {
+        const flash = new THREE.PointLight(0xffff00, 5, 20);
+        flash.position.copy(position);
+        scene.add(flash);
+        
+        // Remove flash after short time
+        setTimeout(() => {
+            scene.remove(flash);
+        }, 50);
+    } catch (error) {
+        console.error("Error creating muzzle flash:", error);
+    }
 }
 
 function updateProjectiles() {
     // Update bullets
     bullets.forEach((bullet, index) => {
-        if (!bullet.userData) return;
+        if (!bullet.userData || !bullet.position) return;
         
-        bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
-        bullet.userData.life -= deltaTime;
-        
-        if (bullet.userData.life <= 0) {
-            scene.remove(bullet);
+        try {
+            bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
+            bullet.userData.life -= deltaTime;
+            
+            if (bullet.userData.life <= 0) {
+                scene.remove(bullet);
+                bullets.splice(index, 1);
+            }
+        } catch (error) {
+            console.error("Error updating bullet:", error);
             bullets.splice(index, 1);
         }
     });
     
     // Update bombs
     bombs.forEach((bomb, index) => {
-        if (!bomb.userData) return;
+        if (!bomb.userData || !bomb.position) return;
         
-        bomb.position.add(bomb.userData.velocity.clone().multiplyScalar(deltaTime));
-        bomb.userData.life -= deltaTime;
-        
-        if (bomb.userData.life <= 0) {
-            createExplosion(bomb.position, bomb.userData.explosionRadius);
-            scene.remove(bomb);
+        try {
+            bomb.position.add(bomb.userData.velocity.clone().multiplyScalar(deltaTime));
+            bomb.userData.life -= deltaTime;
+            
+            if (bomb.userData.life <= 0) {
+                createExplosion(bomb.position, bomb.userData.explosionRadius);
+                scene.remove(bomb);
+                bombs.splice(index, 1);
+            }
+        } catch (error) {
+            console.error("Error updating bomb:", error);
             bombs.splice(index, 1);
         }
     });
     
     // Update missiles
     missiles.forEach((missile, index) => {
-        if (!missile.userData) return;
+        if (!missile.userData || !missile.position) return;
         
-        // Homing missile logic
-        if (missile.userData.homing && missile.userData.target) {
-            const direction = new THREE.Vector3();
-            direction.subVectors(missile.userData.target.position, missile.position).normalize();
+        try {
+            // Homing missile logic
+            if (missile.userData.homing && missile.userData.target && missile.userData.target.position) {
+                const direction = new THREE.Vector3();
+                direction.subVectors(missile.userData.target.position, missile.position).normalize();
+                
+                // Lerp towards target
+                missile.userData.velocity.lerp(direction.multiplyScalar(CONFIG.MISSILE_SPEED), 0.1);
+            }
             
-            // Lerp towards target
-            missile.userData.velocity.lerp(direction.multiplyScalar(CONFIG.MISSILE_SPEED), 0.1);
-        }
-        
-        missile.lookAt(missile.position.clone().add(missile.userData.velocity));
-        missile.rotation.x += Math.PI / 2;
-        
-        missile.position.add(missile.userData.velocity.clone().multiplyScalar(deltaTime));
-        missile.userData.life -= deltaTime;
-        
-        if (missile.userData.life <= 0) {
-            createExplosion(missile.position, 30);
-            scene.remove(missile);
+            missile.lookAt(missile.position.clone().add(missile.userData.velocity));
+            missile.rotation.x += Math.PI / 2;
+            
+            missile.position.add(missile.userData.velocity.clone().multiplyScalar(deltaTime));
+            missile.userData.life -= deltaTime;
+            
+            if (missile.userData.life <= 0) {
+                createExplosion(missile.position, 30);
+                scene.remove(missile);
+                missiles.splice(index, 1);
+            }
+        } catch (error) {
+            console.error("Error updating missile:", error);
             missiles.splice(index, 1);
         }
     });
 }
 
 function checkCollisions() {
+    if (!playerShip || !playerShip.mesh) return;
+    
     // Check player bullets vs enemies
     bullets.forEach((bullet, bulletIndex) => {
-        if (!bullet.userData.isPlayerBullet) return;
+        if (!bullet.userData || !bullet.userData.isPlayerBullet) return;
         
         enemies.forEach((enemy, enemyIndex) => {
             if (bullet.position.distanceTo(enemy.position) < 10) {
@@ -993,7 +1167,7 @@ function checkCollisions() {
     
     // Check enemy bullets vs player
     bullets.forEach((bullet, bulletIndex) => {
-        if (!bullet.userData.isEnemyBullet) return;
+        if (!bullet.userData || !bullet.userData.isEnemyBullet) return;
         
         if (bullet.position.distanceTo(playerShip.mesh.position) < 5) {
             // Hit player
@@ -1097,81 +1271,93 @@ function checkCollisions() {
 }
 
 function checkEnemyCollisions(enemy, enemyIndex) {
-    // Check collisions with player bullets, bombs, missiles
-    // (This is handled in checkCollisions)
+    // This function is called from updateEnemies
+    // Additional collision checks can be added here
 }
 
 function destroyEnemy(enemy, index) {
-    // Create explosion
-    createExplosion(enemy.position, 20);
-    
-    // Update score
-    gameState.player.kills++;
-    gameState.player.score += 100;
-    
-    // Remove enemy
-    scene.remove(enemy);
-    enemies.splice(index, 1);
-    
-    // Update HUD
-    updateHUD();
+    try {
+        // Create explosion
+        createExplosion(enemy.position, 20);
+        
+        // Update score
+        gameState.player.kills++;
+        gameState.player.score += 100;
+        
+        // Remove enemy
+        scene.remove(enemy);
+        enemies.splice(index, 1);
+        
+        // Update HUD
+        updateHUD();
+    } catch (error) {
+        console.error("Error destroying enemy:", error);
+    }
 }
 
 function createExplosion(position, size) {
-    // Create explosion particles
-    const particleCount = 50;
-    const particles = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-    
-    for (let i = 0; i < particleCount * 3; i += 3) {
-        // Random position within explosion radius
-        const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * size;
+    try {
+        // Create explosion particles
+        const particleCount = 50;
+        const particles = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
         
-        positions[i] = position.x + Math.cos(angle) * radius;
-        positions[i + 1] = position.y + Math.random() * size;
-        positions[i + 2] = position.z + Math.sin(angle) * radius;
-        
-        // Random color (yellow to red)
-        colors[i] = 1; // R
-        colors[i + 1] = Math.random() * 0.5; // G
-        colors[i + 2] = 0; // B
-    }
-    
-    particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    
-    const particleMaterial = new THREE.PointsMaterial({
-        size: 2,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending
-    });
-    
-    const explosion = new THREE.Points(particles, particleMaterial);
-    scene.add(explosion);
-    
-    // Animate explosion
-    gsap.to(explosion.material, {
-        opacity: 0,
-        duration: 1,
-        onComplete: () => {
-            scene.remove(explosion);
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            // Random position within explosion radius
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * size;
+            
+            positions[i] = position.x + Math.cos(angle) * radius;
+            positions[i + 1] = position.y + Math.random() * size;
+            positions[i + 2] = position.z + Math.sin(angle) * radius;
+            
+            // Random color (yellow to red)
+            colors[i] = 1; // R
+            colors[i + 1] = Math.random() * 0.5; // G
+            colors[i + 2] = 0; // B
         }
-    });
+        
+        particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        const particleMaterial = new THREE.PointsMaterial({
+            size: 2,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const explosion = new THREE.Points(particles, particleMaterial);
+        scene.add(explosion);
+        
+        // Animate explosion
+        gsap.to(explosion.material, {
+            opacity: 0,
+            duration: 1,
+            onComplete: () => {
+                scene.remove(explosion);
+            }
+        });
+    } catch (error) {
+        console.error("Error creating explosion:", error);
+    }
 }
 
 function createHitEffect(position) {
-    const hitEffect = new THREE.PointLight(0xff0000, 5, 30);
-    hitEffect.position.copy(position);
-    scene.add(hitEffect);
-    
-    // Remove after short time
-    setTimeout(() => {
-        scene.remove(hitEffect);
-    }, 100);
+    try {
+        const hitEffect = new THREE.PointLight(0xff0000, 5, 30);
+        hitEffect.position.copy(position);
+        scene.add(hitEffect);
+        
+        // Remove after short time
+        setTimeout(() => {
+            scene.remove(hitEffect);
+        }, 100);
+    } catch (error) {
+        console.error("Error creating hit effect:", error);
+    }
 }
 
 function startFinalBattle() {
@@ -1189,28 +1375,32 @@ function startFinalBattle() {
 }
 
 function createSpaceStation() {
-    // This would create the final space station with multiple layers
-    // For now, we'll just create a placeholder
-    const station = new THREE.Mesh(
-        new THREE.SphereGeometry(100, 32, 32),
-        new THREE.MeshPhongMaterial({
-            color: 0xff00ff,
-            emissive: 0x440044,
-            emissiveIntensity: 0.3
-        })
-    );
-    
-    station.position.set(0, 0, -CONFIG.WAYPOINT_DISTANCE * 6);
-    station.userData = {
-        isStation: true,
-        health: CONFIG.STATION_HEALTH,
-        maxHealth: CONFIG.STATION_HEALTH
-    };
-    
-    scene.add(station);
-    
-    // Create station defenses
-    createStationDefenses(station.position);
+    try {
+        // This would create the final space station with multiple layers
+        // For now, we'll just create a placeholder
+        const station = new THREE.Mesh(
+            new THREE.SphereGeometry(100, 32, 32),
+            new THREE.MeshPhongMaterial({
+                color: 0xff00ff,
+                emissive: 0x440044,
+                emissiveIntensity: 0.3
+            })
+        );
+        
+        station.position.set(0, 0, -CONFIG.WAYPOINT_DISTANCE * 6);
+        station.userData = {
+            isStation: true,
+            health: CONFIG.STATION_HEALTH,
+            maxHealth: CONFIG.STATION_HEALTH
+        };
+        
+        scene.add(station);
+        
+        // Create station defenses
+        createStationDefenses(station.position);
+    } catch (error) {
+        console.error("Error creating space station:", error);
+    }
 }
 
 function createStationDefenses(position) {
@@ -1232,21 +1422,26 @@ function createStationDefenses(position) {
 }
 
 function createTurret() {
-    const turret = new THREE.Mesh(
-        new THREE.CylinderGeometry(5, 5, 10, 8),
-        new THREE.MeshPhongMaterial({ color: 0xaa0000 })
-    );
-    
-    turret.userData = {
-        isEnemy: true,
-        isTurret: true,
-        health: 200,
-        maxHealth: 200,
-        fireRate: 2000,
-        lastFire: 0
-    };
-    
-    return turret;
+    try {
+        const turret = new THREE.Mesh(
+            new THREE.CylinderGeometry(5, 5, 10, 8),
+            new THREE.MeshPhongMaterial({ color: 0xaa0000 })
+        );
+        
+        turret.userData = {
+            isEnemy: true,
+            isTurret: true,
+            health: 200,
+            maxHealth: 200,
+            fireRate: 2000,
+            lastFire: 0
+        };
+        
+        return turret;
+    } catch (error) {
+        console.error("Error creating turret:", error);
+        return null;
+    }
 }
 
 function deployDrone() {
@@ -1254,23 +1449,27 @@ function deployDrone() {
     
     gameState.weapons.drone--;
     
-    // Create drone that follows and attacks enemies
-    const drone = new THREE.Mesh(
-        new THREE.SphereGeometry(3, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-    );
-    
-    drone.position.copy(playerShip.mesh.position);
-    
-    drone.userData = {
-        isDrone: true,
-        health: 50,
-        target: null,
-        lastAttack: 0,
-        attackRate: 1000
-    };
-    
-    scene.add(drone);
+    try {
+        // Create drone that follows and attacks enemies
+        const drone = new THREE.Mesh(
+            new THREE.SphereGeometry(3, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+        );
+        
+        drone.position.copy(playerShip.mesh.position);
+        
+        drone.userData = {
+            isDrone: true,
+            health: 50,
+            target: null,
+            lastAttack: 0,
+            attackRate: 1000
+        };
+        
+        scene.add(drone);
+    } catch (error) {
+        console.error("Error deploying drone:", error);
+    }
 }
 
 function useNuclearBomb() {
@@ -1278,91 +1477,128 @@ function useNuclearBomb() {
     
     gameState.weapons.nuke--;
     
-    // Create massive explosion that destroys everything
-    createExplosion(playerShip.mesh.position, 500);
-    
-    // Destroy all enemies in range
-    enemies.forEach((enemy, index) => {
-        if (enemy.position.distanceTo(playerShip.mesh.position) < 500) {
-            destroyEnemy(enemy, index);
-        }
-    });
-    
-    // Update HUD
-    updateHUD();
+    try {
+        // Create massive explosion that destroys everything
+        createExplosion(playerShip.mesh.position, 500);
+        
+        // Destroy all enemies in range
+        enemies.forEach((enemy, index) => {
+            if (enemy.position.distanceTo(playerShip.mesh.position) < 500) {
+                destroyEnemy(enemy, index);
+            }
+        });
+        
+        // Update HUD
+        updateHUD();
+    } catch (error) {
+        console.error("Error using nuclear bomb:", error);
+    }
 }
 
 function updateHUD() {
-    // Update health bar
-    const healthPercent = (gameState.player.health / gameState.player.maxHealth) * 100;
-    document.getElementById('healthBar').style.width = healthPercent + '%';
-    document.getElementById('healthText').textContent = Math.round(gameState.player.health) + '%';
-    
-    // Update energy bar
-    const energyPercent = (gameState.player.energy / gameState.player.maxEnergy) * 100;
-    document.getElementById('energyBar').style.width = energyPercent + '%';
-    document.getElementById('energyText').textContent = Math.round(gameState.player.energy) + '%';
-    
-    // Update score
-    document.getElementById('scoreValue').textContent = gameState.player.score;
-    
-    // Update enemy count
-    document.getElementById('enemyCount').textContent = enemies.length;
-    
-    // Update distance
-    document.getElementById('distanceValue').textContent = Math.round(gameState.player.distance) + 'm';
-    
-    // Update weapon counts
-    document.getElementById('bulletCount').textContent = '∞';
-    document.getElementById('bombCount').textContent = gameState.weapons.bombs;
-    document.getElementById('missileCount').textContent = gameState.weapons.missiles;
-    
-    // Update speed
-    document.getElementById('speedValue').textContent = Math.round(playerShip?.speed || 0);
-    
-    // Update waypoint distance
-    if (waypoints[gameState.currentWaypoint - 1]) {
-        const distance = playerShip.mesh.position.distanceTo(waypoints[gameState.currentWaypoint - 1].position);
-        document.getElementById('waypointDistance').textContent = Math.round(distance) + 'm';
+    try {
+        // Update health bar
+        const healthPercent = (gameState.player.health / gameState.player.maxHealth) * 100;
+        const healthBar = document.getElementById('healthBar');
+        const healthText = document.getElementById('healthText');
+        
+        if (healthBar) healthBar.style.width = healthPercent + '%';
+        if (healthText) healthText.textContent = Math.round(gameState.player.health) + '%';
+        
+        // Update energy bar
+        const energyPercent = (gameState.player.energy / gameState.player.maxEnergy) * 100;
+        const energyBar = document.getElementById('energyBar');
+        const energyText = document.getElementById('energyText');
+        
+        if (energyBar) energyBar.style.width = energyPercent + '%';
+        if (energyText) energyText.textContent = Math.round(gameState.player.energy) + '%';
+        
+        // Update score
+        const scoreValue = document.getElementById('scoreValue');
+        if (scoreValue) scoreValue.textContent = gameState.player.score;
+        
+        // Update enemy count
+        const enemyCount = document.getElementById('enemyCount');
+        if (enemyCount) enemyCount.textContent = enemies.length;
+        
+        // Update distance
+        const distanceValue = document.getElementById('distanceValue');
+        if (distanceValue) distanceValue.textContent = Math.round(gameState.player.distance) + 'm';
+        
+        // Update weapon counts
+        const bulletCount = document.getElementById('bulletCount');
+        const bombCount = document.getElementById('bombCount');
+        const missileCount = document.getElementById('missileCount');
+        
+        if (bulletCount) bulletCount.textContent = '∞';
+        if (bombCount) bombCount.textContent = gameState.weapons.bombs;
+        if (missileCount) missileCount.textContent = gameState.weapons.missiles;
+        
+        // Update speed
+        const speedValue = document.getElementById('speedValue');
+        if (speedValue) speedValue.textContent = Math.round(playerShip?.speed || 0);
+        
+        // Update waypoint distance
+        const waypointDistance = document.getElementById('waypointDistance');
+        if (waypointDistance && waypoints[gameState.currentWaypoint - 1]) {
+            const distance = playerShip.mesh.position.distanceTo(waypoints[gameState.currentWaypoint - 1].position);
+            waypointDistance.textContent = Math.round(distance) + 'm';
+        }
+    } catch (error) {
+        console.error("Error updating HUD:", error);
     }
 }
 
 function updateWaypointDisplay() {
-    // Update waypoint list
-    document.querySelectorAll('.waypoint-item').forEach((item, index) => {
-        if (index < gameState.currentWaypoint) {
-            item.classList.add('active');
-        } else {
-            item.classList.remove('active');
+    try {
+        // Update waypoint list
+        document.querySelectorAll('.waypoint-item').forEach((item, index) => {
+            if (index < gameState.currentWaypoint) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+        
+        // Update progress dots
+        document.querySelectorAll('.progress-dots .dot').forEach((dot, index) => {
+            if (index < gameState.currentWaypoint) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        });
+        
+        // Update mission progress
+        const progressPercent = ((gameState.currentWaypoint - 1) / CONFIG.TOTAL_WAYPOINTS) * 100;
+        const missionProgress = document.getElementById('missionProgress');
+        if (missionProgress) missionProgress.style.width = progressPercent + '%';
+        
+        // Update mission text
+        const missionText = document.getElementById('missionText');
+        if (missionText && gameState.currentWaypoint <= CONFIG.TOTAL_WAYPOINTS) {
+            missionText.textContent = `Reach Waypoint ${gameState.currentWaypoint}`;
         }
-    });
-    
-    // Update progress dots
-    document.querySelectorAll('.progress-dots .dot').forEach((dot, index) => {
-        if (index < gameState.currentWaypoint) {
-            dot.classList.add('active');
-        } else {
-            dot.classList.remove('active');
-        }
-    });
-    
-    // Update mission progress
-    const progressPercent = ((gameState.currentWaypoint - 1) / CONFIG.TOTAL_WAYPOINTS) * 100;
-    document.getElementById('missionProgress').style.width = progressPercent + '%';
-    
-    // Update mission text
-    if (gameState.currentWaypoint <= CONFIG.TOTAL_WAYPOINTS) {
-        document.getElementById('missionText').textContent = `Reach Waypoint ${gameState.currentWaypoint}`;
+    } catch (error) {
+        console.error("Error updating waypoint display:", error);
     }
 }
 
 function showCongratulations(message) {
-    document.getElementById('congratsTitle').textContent = message;
-    document.getElementById('congratsMessage').textContent = 'Proceeding to next objective...';
-    document.getElementById('congratulationsPopup').classList.remove('hidden');
-    
-    // Pause game
-    gameState.isPaused = true;
+    try {
+        const congratsTitle = document.getElementById('congratsTitle');
+        const congratsMessage = document.getElementById('congratsMessage');
+        
+        if (congratsTitle) congratsTitle.textContent = message;
+        if (congratsMessage) congratsMessage.textContent = 'Proceeding to next objective...';
+        
+        document.getElementById('congratulationsPopup').classList.remove('hidden');
+        
+        // Pause game
+        gameState.isPaused = true;
+    } catch (error) {
+        console.error("Error showing congratulations:", error);
+    }
 }
 
 function continueMission() {
@@ -1376,153 +1612,292 @@ function continueMission() {
 }
 
 function showNotification(type, message) {
-    const notification = document.getElementById(type);
-    if (notification) {
-        notification.querySelector('span').textContent = message;
-        notification.classList.remove('hidden');
-        
-        // Hide after 3 seconds
-        setTimeout(() => {
-            notification.classList.add('hidden');
-        }, 3000);
+    try {
+        const notification = document.getElementById(type);
+        if (notification) {
+            const span = notification.querySelector('span');
+            if (span) span.textContent = message;
+            notification.classList.remove('hidden');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        console.error("Error showing notification:", error);
     }
 }
 
 function gameOver() {
     gameState.isGameOver = true;
     
-    // Update final stats
-    document.getElementById('finalDistance').textContent = Math.round(gameState.player.distance) + 'm';
-    document.getElementById('finalKills').textContent = gameState.player.kills;
-    document.getElementById('finalWaypoints').textContent = `${gameState.currentWaypoint - 1}/${CONFIG.TOTAL_WAYPOINTS}`;
-    document.getElementById('finalScore').textContent = gameState.player.score;
-    
-    // Show game over screen
-    document.getElementById('gameHUD').classList.add('hidden');
-    document.getElementById('finalBattleHUD').classList.add('hidden');
-    document.getElementById('waypointIndicator').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.remove('hidden');
+    try {
+        // Update final stats
+        const finalDistance = document.getElementById('finalDistance');
+        const finalKills = document.getElementById('finalKills');
+        const finalWaypoints = document.getElementById('finalWaypoints');
+        const finalScore = document.getElementById('finalScore');
+        
+        if (finalDistance) finalDistance.textContent = Math.round(gameState.player.distance) + 'm';
+        if (finalKills) finalKills.textContent = gameState.player.kills;
+        if (finalWaypoints) finalWaypoints.textContent = `${gameState.currentWaypoint - 1}/${CONFIG.TOTAL_WAYPOINTS}`;
+        if (finalScore) finalScore.textContent = gameState.player.score;
+        
+        // Show game over screen
+        document.getElementById('gameHUD').classList.add('hidden');
+        document.getElementById('finalBattleHUD').classList.add('hidden');
+        document.getElementById('waypointIndicator').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+        
+        stopGameLoop();
+    } catch (error) {
+        console.error("Error in game over:", error);
+    }
 }
 
 function missionComplete() {
     gameState.missionComplete = true;
     
-    // Update mission complete stats
-    const missionTime = Math.round(gameState.player.distance / CONFIG.PLAYER_SPEED);
-    const minutes = Math.floor(missionTime / 60);
-    const seconds = missionTime % 60;
-    
-    document.getElementById('missionTime').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById('totalKills').textContent = gameState.player.kills;
-    document.getElementById('missionAccuracy').textContent = '85%'; // This would be calculated
-    document.getElementById('missionScore').textContent = gameState.player.score;
-    
-    // Show mission complete screen
-    document.getElementById('gameHUD').classList.add('hidden');
-    document.getElementById('finalBattleHUD').classList.add('hidden');
-    document.getElementById('missionCompleteScreen').classList.remove('hidden');
-    
-    // Create confetti effect
-    createConfetti();
+    try {
+        // Update mission complete stats
+        const missionTime = Math.round(gameState.player.distance / CONFIG.PLAYER_SPEED);
+        const minutes = Math.floor(missionTime / 60);
+        const seconds = missionTime % 60;
+        
+        const missionTimeEl = document.getElementById('missionTime');
+        const totalKillsEl = document.getElementById('totalKills');
+        const missionAccuracyEl = document.getElementById('missionAccuracy');
+        const missionScoreEl = document.getElementById('missionScore');
+        
+        if (missionTimeEl) missionTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        if (totalKillsEl) totalKillsEl.textContent = gameState.player.kills;
+        if (missionAccuracyEl) missionAccuracyEl.textContent = '85%'; // This would be calculated
+        if (missionScoreEl) missionScoreEl.textContent = gameState.player.score;
+        
+        // Show mission complete screen
+        document.getElementById('gameHUD').classList.add('hidden');
+        document.getElementById('finalBattleHUD').classList.add('hidden');
+        document.getElementById('missionCompleteScreen').classList.remove('hidden');
+        
+        // Create confetti effect
+        createConfetti();
+        
+        stopGameLoop();
+        
+        // Save high score
+        const savedHighScore = parseInt(localStorage.getItem('galacticWarHighScore') || '0');
+        if (gameState.player.score > savedHighScore) {
+            localStorage.setItem('galacticWarHighScore', gameState.player.score.toString());
+        }
+        
+        // Update missions completed
+        const savedMissions = parseInt(localStorage.getItem('galacticWarMissions') || '0');
+        localStorage.setItem('galacticWarMissions', (savedMissions + 1).toString());
+        
+        // Update total kills
+        const savedKills = parseInt(localStorage.getItem('galacticWarKills') || '0');
+        localStorage.setItem('galacticWarKills', (savedKills + gameState.player.kills).toString());
+    } catch (error) {
+        console.error("Error in mission complete:", error);
+    }
 }
 
 function createConfetti() {
-    const confettiContainer = document.querySelector('.confetti-container');
-    
-    for (let i = 0; i < 100; i++) {
-        const confetti = document.createElement('div');
-        confetti.className = 'confetti';
-        confetti.style.cssText = `
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: hsl(${Math.random() * 360}, 100%, 50%);
-            top: -20px;
-            left: ${Math.random() * 100}%;
-            animation: fall ${Math.random() * 3 + 2}s linear infinite;
-        `;
+    try {
+        const confettiContainer = document.querySelector('.confetti-container');
+        if (!confettiContainer) return;
         
-        confettiContainer.appendChild(confetti);
+        confettiContainer.innerHTML = '';
+        
+        for (let i = 0; i < 100; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.cssText = `
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background: hsl(${Math.random() * 360}, 100%, 50%);
+                top: -20px;
+                left: ${Math.random() * 100}%;
+                animation: fall ${Math.random() * 3 + 2}s linear infinite;
+            `;
+            
+            confettiContainer.appendChild(confetti);
+        }
+    } catch (error) {
+        console.error("Error creating confetti:", error);
     }
 }
 
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    if (composer) {
-        composer.setSize(window.innerWidth, window.innerHeight);
+    try {
+        if (camera && renderer) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    } catch (error) {
+        console.error("Error on window resize:", error);
     }
 }
 
 function loadSavedData() {
-    // Load saved settings and stats from localStorage
-    const savedHighScore = localStorage.getItem('galacticWarHighScore') || 0;
-    const savedMissions = localStorage.getItem('galacticWarMissions') || 0;
-    const savedKills = localStorage.getItem('galacticWarKills') || 0;
-    
-    document.getElementById('menuHighScore').textContent = savedHighScore;
-    document.getElementById('menuMissions').textContent = savedMissions;
-    document.getElementById('menuKills').textContent = savedKills;
+    try {
+        // Load saved settings and stats from localStorage
+        const savedHighScore = localStorage.getItem('galacticWarHighScore') || '0';
+        const savedMissions = localStorage.getItem('galacticWarMissions') || '0';
+        const savedKills = localStorage.getItem('galacticWarKills') || '0';
+        
+        const menuHighScore = document.getElementById('menuHighScore');
+        const menuMissions = document.getElementById('menuMissions');
+        const menuKills = document.getElementById('menuKills');
+        
+        if (menuHighScore) menuHighScore.textContent = savedHighScore;
+        if (menuMissions) menuMissions.textContent = savedMissions;
+        if (menuKills) menuKills.textContent = savedKills;
+        
+        // Load settings
+        const difficulty = localStorage.getItem('galacticWarDifficulty');
+        const autoAim = localStorage.getItem('galacticWarAutoAim');
+        const masterVolume = localStorage.getItem('galacticWarMasterVolume');
+        const musicVolume = localStorage.getItem('galacticWarMusicVolume');
+        const sfxVolume = localStorage.getItem('galacticWarSfxVolume');
+        
+        if (difficulty) {
+            gameState.settings.difficulty = difficulty;
+            const difficultySelect = document.getElementById('difficultySelect');
+            if (difficultySelect) difficultySelect.value = difficulty;
+        }
+        
+        if (autoAim) {
+            gameState.settings.autoAim = autoAim === 'true';
+            const autoAimCheck = document.getElementById('autoAimCheck');
+            if (autoAimCheck) autoAimCheck.checked = gameState.settings.autoAim;
+        }
+        
+        if (masterVolume) {
+            gameState.settings.masterVolume = parseFloat(masterVolume);
+            const masterVolumeSlider = document.getElementById('masterVolume');
+            if (masterVolumeSlider) masterVolumeSlider.value = gameState.settings.masterVolume * 100;
+        }
+        
+        if (musicVolume) {
+            gameState.settings.musicVolume = parseFloat(musicVolume);
+            const musicVolumeSlider = document.getElementById('musicVolume');
+            if (musicVolumeSlider) musicVolumeSlider.value = gameState.settings.musicVolume * 100;
+        }
+        
+        if (sfxVolume) {
+            gameState.settings.sfxVolume = parseFloat(sfxVolume);
+            const sfxVolumeSlider = document.getElementById('sfxVolume');
+            if (sfxVolumeSlider) sfxVolumeSlider.value = gameState.settings.sfxVolume * 100;
+        }
+    } catch (error) {
+        console.error("Error loading saved data:", error);
+    }
 }
 
 function saveSettings() {
-    // Save settings to localStorage
-    const difficulty = document.getElementById('difficultySelect').value;
-    const autoAim = document.getElementById('autoAimCheck').checked;
-    
-    localStorage.setItem('galacticWarDifficulty', difficulty);
-    localStorage.setItem('galacticWarAutoAim', autoAim);
-    
-    // Return to main menu
-    showScreen('mainMenu');
+    try {
+        // Save settings to localStorage
+        const difficultySelect = document.getElementById('difficultySelect');
+        const autoAimCheck = document.getElementById('autoAimCheck');
+        const masterVolume = document.getElementById('masterVolume');
+        const musicVolume = document.getElementById('musicVolume');
+        const sfxVolume = document.getElementById('sfxVolume');
+        
+        if (difficultySelect) {
+            gameState.settings.difficulty = difficultySelect.value;
+            localStorage.setItem('galacticWarDifficulty', gameState.settings.difficulty);
+        }
+        
+        if (autoAimCheck) {
+            gameState.settings.autoAim = autoAimCheck.checked;
+            localStorage.setItem('galacticWarAutoAim', gameState.settings.autoAim.toString());
+        }
+        
+        if (masterVolume) {
+            gameState.settings.masterVolume = parseInt(masterVolume.value) / 100;
+            localStorage.setItem('galacticWarMasterVolume', gameState.settings.masterVolume.toString());
+        }
+        
+        if (musicVolume) {
+            gameState.settings.musicVolume = parseInt(musicVolume.value) / 100;
+            localStorage.setItem('galacticWarMusicVolume', gameState.settings.musicVolume.toString());
+        }
+        
+        if (sfxVolume) {
+            gameState.settings.sfxVolume = parseInt(sfxVolume.value) / 100;
+            localStorage.setItem('galacticWarSfxVolume', gameState.settings.sfxVolume.toString());
+        }
+        
+        // Return to main menu
+        showScreen('mainMenu');
+    } catch (error) {
+        console.error("Error saving settings:", error);
+    }
 }
 
 function animate() {
-    if (!gameState.missionStarted || gameState.isPaused || gameState.isGameOver) return;
+    if (!gameState.missionStarted || gameState.isPaused || gameState.isGameOver || !renderer || !scene || !camera) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+    }
     
-    requestAnimationFrame(animate);
-    
-    // Calculate delta time
-    deltaTime = clock.getDelta();
-    
-    // Update game systems
-    updatePlayerMovement();
-    updateEnemies();
-    updateProjectiles();
-    checkCollisions();
-    
-    // Update HUD
-    updateHUD();
-    
-    // Render scene
-    renderer.render(scene, camera);
-    
-    // Update FPS counter
-    updateFPSCounter();
+    try {
+        // Calculate delta time
+        deltaTime = clock.getDelta();
+        
+        // Update game systems
+        updatePlayerMovement();
+        updateEnemies();
+        updateProjectiles();
+        checkCollisions();
+        
+        // Update HUD
+        updateHUD();
+        
+        // Render scene
+        renderer.render(scene, camera);
+        
+        // Update FPS counter
+        updateFPSCounter();
+        
+        // Request next frame
+        animationFrameId = requestAnimationFrame(animate);
+    } catch (error) {
+        console.error("Error in animation loop:", error);
+        // Stop the loop on error
+        stopGameLoop();
+    }
 }
 
 function updateFPSCounter() {
-    const fps = Math.round(1 / deltaTime);
-    const fpsElement = document.getElementById('fpsCounter');
-    
-    if (fpsElement) {
-        fpsElement.textContent = `FPS: ${fps}`;
+    try {
+        const fps = deltaTime > 0 ? Math.round(1 / deltaTime) : 60;
+        const fpsElement = document.getElementById('fpsCounter');
         
-        // Color code based on FPS
-        if (fps > 50) {
-            fpsElement.style.color = '#00ff00';
-        } else if (fps > 30) {
-            fpsElement.style.color = '#ffff00';
-        } else {
-            fpsElement.style.color = '#ff0000';
+        if (fpsElement) {
+            fpsElement.textContent = `FPS: ${fps}`;
             
-            // Show performance warning if FPS is low
-            if (!document.getElementById('perfWarning').classList.contains('hidden')) {
-                document.getElementById('perfWarning').classList.remove('hidden');
+            // Color code based on FPS
+            if (fps > 50) {
+                fpsElement.style.color = '#00ff00';
+            } else if (fps > 30) {
+                fpsElement.style.color = '#ffff00';
+            } else {
+                fpsElement.style.color = '#ff0000';
+                
+                // Show performance warning if FPS is low
+                const perfWarning = document.getElementById('perfWarning');
+                if (perfWarning && perfWarning.classList.contains('hidden')) {
+                    perfWarning.classList.remove('hidden');
+                }
             }
         }
+    } catch (error) {
+        console.error("Error updating FPS counter:", error);
     }
 }
 
@@ -1530,4 +1905,9 @@ function updateFPSCounter() {
 window.addEventListener('DOMContentLoaded', () => {
     console.log("DOM loaded, initializing game...");
     initGame();
+});
+
+// Handle page unload
+window.addEventListener('beforeunload', () => {
+    stopGameLoop();
 });
