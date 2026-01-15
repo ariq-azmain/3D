@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ariq Azmain's Galactic War</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            background: #000;
+        }
+        
+        #gameCanvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingScreen">
+        <div class="loader">
+            <div class="spaceship-loader">
+                <i class="fas fa-rocket"></i>
+            </div>
+            <h2>GALACTIC WAR</h2>
+            <p>Commander: Ariq Azmain</p>
+            <div class="progress-bar">
+                <div class="progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-top-left">
+            <div class="hud-item">
+                <div class="hud-label">HEALTH</div>
+                <div class="health-bar">
+                    <div class="health-fill" id="healthFill"></div>
+                </div>
+                <div class="hud-value" id="healthValue">100%</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">SHIELDS</div>
+                <div class="shield-bar">
+                    <div class="shield-fill" id="shieldFill"></div>
+                </div>
+                <div class="hud-value" id="shieldValue">100%</div>
+            </div>
+        </div>
+        
+        <div class="hud-top-right">
+            <div class="hud-item">
+                <div class="hud-label">SCORE</div>
+                <div class="hud-value large" id="scoreValue">0</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">ENEMIES</div>
+                <div class="hud-value" id="enemyCount">0</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">WAVE</div>
+                <div class="hud-value" id="waveValue">1</div>
+            </div>
+        </div>
+        
+        <div class="hud-weapon">
+            <div class="weapon-selector">
+                <button class="weapon-btn active" data-weapon="bullet">
+                    <i class="fas fa-circle"></i>
+                    <span class="weapon-name">BULLET</span>
+                </button>
+                <button class="weapon-btn" data-weapon="bomb">
+                    <i class="fas fa-bomb"></i>
+                    <span class="weapon-name">BOMB</span>
+                </button>
+                <button class="weapon-btn" data-weapon="missile">
+                    <i class="fas fa-rocket"></i>
+                    <span class="weapon-name">MISSILE</span>
+                </button>
+            </div>
+            <div class="ammo-info">
+                <div class="ammo-count">
+                    <i class="fas fa-bullseye"></i>
+                    <span id="bulletCount">∞</span>
+                </div>
+                <div class="ammo-count">
+                    <i class="fas fa-bomb"></i>
+                    <span id="bombCount">10</span>
+                </div>
+                <div class="ammo-count">
+                    <i class="fas fa-rocket"></i>
+                    <span id="missileCount">5</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hud-bottom">
+            <div class="speed-indicator">
+                <div class="speed-label">SPEED</div>
+                <div class="speed-bar">
+                    <div class="speed-fill" id="speedFill"></div>
+                </div>
+                <div class="speed-value" id="speedValue">0%</div>
+            </div>
+            
+            <div class="mini-map" id="miniMap">
+                <div class="player-dot" id="playerDot"></div>
+            </div>
+            
+            <div class="warning" id="lowHealthWarning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>CRITICAL HEALTH!</span>
+            </div>
+        </div>
+        
+        <div class="boss-warning hidden" id="bossWarning">
+            <div class="warning-content">
+                <i class="fas fa-skull-crossbones"></i>
+                <h3>BOSS INCOMING!</h3>
+                <p>Defeat the enemy flagship!</p>
+            </div>
+        </div>
+        
+        <div class="health-pickup-notice hidden" id="healthPickupNotice">
+            <i class="fas fa-heart"></i>
+            <span>Health Pack Available!</span>
+        </div>
+    </div>
+
+    <div id="mobileControls">
+        <div class="control-group movement">
+            <div class="joystick-area" id="movementJoystick">
+                <div class="joystick-base">
+                    <div class="joystick-handle"></div>
+                </div>
+                <div class="joystick-label">MOVE</div>
+            </div>
+        </div>
+        
+        <div class="control-group rotation">
+            <div class="joystick-area" id="rotationJoystick">
+                <div class="joystick-base">
+                    <div class="joystick-handle"></div>
+                </div>
+                <div class="joystick-label">ROTATE</div>
+            </div>
+        </div>
+        
+        <div class="control-group actions">
+            <button class="action-btn speed-btn" id="speedBoostBtn">
+                <i class="fas fa-rocket"></i>
+                <span>BOOST</span>
+            </button>
+            
+            <div class="fire-buttons">
+                <button class="fire-btn primary-fire" id="primaryFireBtn">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>FIRE</span>
+                </button>
+                <button class="fire-btn special-fire" id="specialFireBtn">
+                    <i class="fas fa-bolt"></i>
+                    <span>POWER</span>
+                </button>
+            </div>
+            
+            <button class="action-btn brake-btn" id="brakeBtn">
+                <i class="fas fa-hand-paper"></i>
+                <span>BRAKE</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="startScreen" class="screen">
+        <div class="start-content">
+            <h1 class="game-title">GALACTIC WAR</h1>
+            <h2 class="commander-name">Commander: Ariq Azmain</h2>
+            
+            <div class="game-stats">
+                <div class="stat">
+                    <div class="stat-label">HIGH SCORE</div>
+                    <div class="stat-value" id="highScoreDisplay">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">WAVES SURVIVED</div>
+                    <div class="stat-value" id="wavesSurvivedDisplay">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">ENEMIES DESTROYED</div>
+                    <div class="stat-value" id="enemiesDestroyedDisplay">0</div>
+                </div>
+            </div>
+            
+            <div class="start-buttons">
+                <button id="startGameBtn" class="start-btn">
+                    <i class="fas fa-play"></i>
+                    START MISSION
+                </button>
+                <button id="instructionsBtn" class="start-btn">
+                    <i class="fas fa-info-circle"></i>
+                    INSTRUCTIONS
+                </button>
+                <button id="settingsBtn" class="start-btn">
+                    <i class="fas fa-cog"></i>
+                    SETTINGS
+                </button>
+            </div>
+            
+            <div class="controls-tip">
+                <p><i class="fas fa-mobile-alt"></i> Tilt device for 360° rotation</p>
+                <p><i class="fas fa-gamepad"></i> Use on-screen controls for movement</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="instructionsScreen" class="screen hidden">
+        <div class="instructions-content">
+            <h2>HOW TO PLAY</h2>
+            
+            <div class="instruction-section">
+                <h3><i class="fas fa-arrows-alt"></i> MOVEMENT</h3>
+                <p>• Left joystick: Move forward/backward, left/right</p>
+                <p>• Right joystick: Rotate 360°</p>
+                <p>• Tilt device: Alternative rotation control</p>
+            </div>
+            
+            <div class="instruction-section">
+                <h3><i class="fas fa-crosshairs"></i> WEAPONS</h3>
+                <p>• <span class="bullet-text">BULLET</span>: Basic weapon, unlimited ammo</p>
+                <p>• <span class="bomb-text">BOMB</span>: Area damage, limited ammo</p>
+                <p>• <span class="missile-text">MISSILE</span>: Homing missiles, limited ammo</p>
+            </div>
+            
+            <div class="instruction-section">
+                <h3><i class="fas fa-shield-alt"></i> COMBAT</h3>
+                <p>• Destroy enemy ships to earn points</p>
+                <p>• Collect health packs to restore HP</p>
+                <p>• Avoid enemy fire and collisions</p>
+                <p>• Every 5 waves, face a boss enemy</p>
+            </div>
+            
+            <button id="backToMenuBtn" class="back-btn">
+                <i class="fas fa-arrow-left"></i> BACK TO MENU
+            </button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="screen hidden">
+        <div class="game-over-content">
+            <h1 class="game-over-title">MISSION FAILED</h1>
+            <h2 class="commander-name">Commander: Ariq Azmain</h2>
+            
+            <div class="final-stats">
+                <div class="final-stat">
+                    <div class="final-stat-label">FINAL SCORE</div>
+                    <div class="final-stat-value" id="finalScore">0</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-label">WAVES SURVIVED</div>
+                    <div class="final-stat-value" id="finalWaves">0</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-label">ENEMIES DESTROYED</div>
+                    <div class="final-stat-value" id="finalEnemies">0</div>
+                </div>
+                <div class="final-stat">
+                    <div class="final-stat-label">ACCURACY</div>
+                    <div class="final-stat-value" id="finalAccuracy">0%</div>
+                </div>
+            </div>
+            
+            <div class="rank-display">
+                <div class="rank-label">RANK</div>
+                <div class="rank-value" id="rankValue">ROOKIE</div>
+            </div>
+            
+            <div class="game-over-buttons">
+                <button id="restartBtn" class="game-over-btn">
+                    <i class="fas fa-redo"></i> TRY AGAIN
+                </button>
+                <button id="menuBtn" class="game-over-btn">
+                    <i class="fas fa-home"></i> MAIN MENU
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pauseScreen" class="screen hidden">
+        <div class="pause-content">
+            <h1>MISSION PAUSED</h1>
+            <div class="pause-stats">
+                <p>Score: <span id="pauseScore">0</span></p>
+                <p>Wave: <span id="pauseWave">1</span></p>
+                <p>Health: <span id="pauseHealth">100%</span></p>
+            </div>
+            
+            <div class="pause-buttons">
+                <button id="resumeBtn" class="pause-btn">
+                    <i class="fas fa-play"></i> RESUME
+                </button>
+                <button id="restartPauseBtn" class="pause-btn">
+                    <i class="fas fa-redo"></i> RESTART
+                </button>
+                <button id="menuPauseBtn" class="pause-btn">
+                    <i class="fas fa-home"></i> MENU
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="backgroundMusic" loop>
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="bulletSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="bombSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="missileSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="explosionSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="hitSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="powerupSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+    
+    <audio id="warningSound">
+        <source src="" type="audio/mpeg">
+    </audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DeviceOrientationControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
