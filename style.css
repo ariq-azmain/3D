@@ -883,6 +883,47 @@ canvas {
     }
 }
 
+/* Orientation warning */
+#orientationWarning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    color: white;
+    z-index: 10000;
+    padding: 2rem;
+    text-align: center;
+    flex-direction: column;
+}
+
+@media (orientation: portrait) {
+    #orientationWarning {
+        display: flex;
+    }
+}
+
+@media (orientation: landscape) {
+    #orientationWarning {
+        display: none;
+    }
+    
+    #gameContainer {
+        display: block !important;
+    }
+    
+    .screen {
+        display: flex !important;
+    }
+}
+
+/* Remove the old orientation warning from body::after */
+/* Delete or comment out this section from your CSS:
 @media (orientation: portrait) {
     body::after {
         content: "Please rotate your device to landscape mode";
@@ -902,7 +943,37 @@ canvas {
         text-align: center;
     }
 }
+*/
+/* Orientation warning */
+#orientationWarning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    color: white;
+    z-index: 10000;
+    padding: 2rem;
+    text-align: center;
+    flex-direction: column;
+}
 
+@media (orientation: portrait) {
+    #orientationWarning {
+        display: flex;
+    }
+}
+
+@media (orientation: landscape) {
+    #orientationWarning {
+        display: none;
+    }
+}
 /* Screen red effect for low health */
 .screen-red {
     animation: screenRed 0.3s ease-out;

@@ -64,10 +64,17 @@ let weaponButtons = [];
 
 // Initialize the game
 function init() {
+    // First check orientation
+    checkOrientation();
+    
     getDOMElements();
     setupEventListeners();
     setupAudio();
     showLoadingScreen();
+    
+    // Add orientation change listener
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('resize', handleOrientationChange);
     
     setTimeout(() => {
         initThreeJS();
@@ -79,6 +86,38 @@ function init() {
             showStartScreen();
         }, 2000);
     }, 500);
+}
+
+function checkOrientation() {
+    const orientationWarning = document.getElementById('orientationWarning');
+    const forceStartBtn = document.getElementById('forceStartBtn');
+    
+    // Check if device is in portrait mode
+    const isPortrait = window.innerHeight > window.innerWidth;
+    
+    if (isPortrait) {
+        orientationWarning.style.display = 'flex';
+        // Hide all game elements
+        document.querySelectorAll('#loadingScreen, #startScreen, #gameContainer, .screen').forEach(el => {
+            el.style.display = 'none';
+        });
+    } else {
+        orientationWarning.style.display = 'none';
+        // Show loading screen
+        document.getElementById('loadingScreen').style.display = 'flex';
+    }
+    
+    // Force start button
+    if (forceStartBtn) {
+        forceStartBtn.addEventListener('click', () => {
+            orientationWarning.style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'flex';
+        });
+    }
+}
+
+function handleOrientationChange() {
+    checkOrientation();
 }
 
 function getDOMElements() {
@@ -134,6 +173,25 @@ function setupEventListeners() {
     resumeBtn.addEventListener('click', resumeGame);
     restartPauseBtn.addEventListener('click', restartGame);
     menuPauseBtn.addEventListener('click', goToMenu);
+    
+    // Add this for orientation support
+    if (window.DeviceOrientationEvent) {
+        // Request permission for iOS 13+
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            document.addEventListener('click', function requestPermission() {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleDeviceOrientation);
+                        }
+                    })
+                    .catch(console.error);
+                document.removeEventListener('click', requestPermission);
+            });
+        } else {
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+        }
+    }
     
     // Mobile controls
     setupMobileControls();
@@ -500,7 +558,12 @@ function showSettings() {
 function startGame() {
     startScreen.classList.add('hidden');
     hud.classList.remove('hidden');
-    mobileControls.classList.remove('hidden');
+    
+    // Check if mobile device and show controls
+    if ('ontouchstart' in window || navigator.maxTouchPoints) {
+        mobileControls.classList.remove('hidden');
+    }
+    
     gameState.paused = false;
     gameState.gameOver = false;
     
@@ -1793,9 +1856,13 @@ function gameOver() {
 }
 
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    checkOrientation(); // Check orientation on resize
+    
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 }
 
 function animate() {
