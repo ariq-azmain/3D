@@ -26,14 +26,43 @@
             background: #000;
         }
         
-        #gameCanvas {
+        #gameContainer {
             width: 100vw;
             height: 100vh;
             display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #fullscreenBtn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 40, 80, 0.7);
+            border: 1px solid #00a0ff;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 300;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        #fullscreenBtn:hover {
+            background: rgba(0, 60, 120, 0.9);
         }
     </style>
 </head>
 <body>
+    <button id="fullscreenBtn">
+        <i class="fas fa-expand"></i> Fullscreen
+    </button>
+
     <div id="orientationWarning">
         <div class="orientation-content">
             <i class="fas fa-mobile-alt fa-4x" style="margin-bottom: 20px;"></i>
@@ -50,7 +79,6 @@
     </div>
 
     <div id="loadingScreen">
-    <!-- Rest of your HTML code -->
         <div class="loader">
             <div class="spaceship-loader">
                 <i class="fas fa-rocket"></i>
@@ -62,8 +90,6 @@
             </div>
         </div>
     </div>
-    
-
 
     <div id="hud" class="hidden">
         <div class="hud-top-left">
@@ -342,42 +368,40 @@
         </div>
     </div>
 
+    <!-- Audio with internet-based sources -->
     <audio id="backgroundMusic" loop>
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/music/preview/mixkit-game-show-suspense-waiting-667.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="bulletSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-laser-weapon-shot-1671.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="bombSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-bomb-explosion-in-battle-2800.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="missileSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-missile-woosh-1095.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="explosionSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-battle-explosion-2807.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="hitSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-metal-hit-impact-909.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="powerupSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3" type="audio/mpeg">
     </audio>
     
     <audio id="warningSound">
-        <source src="" type="audio/mpeg">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3" type="audio/mpeg">
     </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DeviceOrientationControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
-    <script src="fix.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

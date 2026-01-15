@@ -1,14 +1,23 @@
-// Galactic War Game - Complete 3D Space Shooter
+// Galactic War Game - Performance Optimized Version
 // Dedicated to Commander Ariq Azmain
 
 // Main Game Variables
-let scene, camera, renderer, controls;
+let scene, camera, renderer;
 let player, enemies = [], bullets = [], bombs = [], missiles = [], particles = [], healthPacks = [];
 let joystickMove = { x: 0, y: 0, active: false };
 let joystickRotate = { x: 0, y: 0, active: false };
 let deviceOrientation = { alpha: 0, beta: 90, gamma: 0 };
 let frame = null;
 let stars = [];
+
+// Performance optimizations
+let lastTime = 0;
+let fixedTimeStep = 1/60; // 60 FPS target
+let accumulator = 0;
+let particlePool = [];
+let bulletPool = [];
+const MAX_PARTICLES = 200;
+const MAX_BULLETS = 100;
 
 // Game State
 let gameState = {
@@ -41,8 +50,7 @@ let gameState = {
     totalKills: localStorage.getItem('galacticWarKills') || 0
 };
 
-// Sound System
-let audioContext;
+// Sound System - Optimized
 let sounds = {
     bullet: null,
     bomb: null,
@@ -56,11 +64,94 @@ let sounds = {
 
 // DOM Elements
 let loadingScreen, startScreen, gameOverScreen, pauseScreen, instructionsScreen;
-let hud, mobileControls, canvas;
+let hud, mobileControls, gameContainer;
 let startGameBtn, instructionsBtn, settingsBtn, backToMenuBtn;
 let restartBtn, menuBtn, resumeBtn, restartPauseBtn, menuPauseBtn;
 let movementJoystick, rotationJoystick, primaryFireBtn, specialFireBtn, speedBoostBtn, brakeBtn;
 let weaponButtons = [];
+let fullscreenBtn;
+let orientationWarning, forceStartBtn;
+
+// Audio elements
+let audioElements = {
+    backgroundMusic: null,
+    bulletSound: null,
+    bombSound: null,
+    missileSound: null,
+    explosionSound: null,
+    hitSound: null,
+    powerupSound: null,
+    warningSound: null
+};
+
+// Initialize object pools
+function initObjectPools() {
+    // Create particle pool
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+        const geometry = new THREE.SphereGeometry(0.2, 8, 8);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.visible = false;
+        scene.add(mesh);
+        particlePool.push({
+            mesh: mesh,
+            active: false,
+            lifeTime: 0,
+            maxLifeTime: 0,
+            velocity: new THREE.Vector3(),
+            color: new THREE.Color(),
+            size: 0.2
+        });
+    }
+    
+    // Create bullet pool
+    for (let i = 0; i < MAX_BULLETS; i++) {
+        const geometry = new THREE.SphereGeometry(0.2, 8, 8);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.visible = false;
+        scene.add(mesh);
+        bulletPool.push({
+            mesh: mesh,
+            active: false,
+            position: new THREE.Vector3(),
+            velocity: new THREE.Vector3(),
+            type: 'bullet',
+            size: 0.2,
+            homing: false,
+            target: null,
+            lifeTime: 0
+        });
+    }
+}
+
+// Get particle from pool
+function getParticleFromPool() {
+    for (let i = 0; i < particlePool.length; i++) {
+        if (!particlePool[i].active) {
+            particlePool[i].active = true;
+            particlePool[i].mesh.visible = true;
+            return particlePool[i];
+        }
+    }
+    return null; // No available particles
+}
+
+// Get bullet from pool
+function getBulletFromPool() {
+    for (let i = 0; i < bulletPool.length; i++) {
+        if (!bulletPool[i].active) {
+            bulletPool[i].active = true;
+            bulletPool[i].mesh.visible = true;
+            return bulletPool[i];
+        }
+    }
+    return null; // No available bullets
+}
 
 // Initialize the game
 function init() {
@@ -76,8 +167,10 @@ function init() {
     window.addEventListener('orientationchange', handleOrientationChange);
     window.addEventListener('resize', handleOrientationChange);
     
+    // Initialize Three.js and start the game
     setTimeout(() => {
         initThreeJS();
+        initObjectPools(); // Initialize object pools
         initGame();
         animate();
         
@@ -89,8 +182,8 @@ function init() {
 }
 
 function checkOrientation() {
-    const orientationWarning = document.getElementById('orientationWarning');
-    const forceStartBtn = document.getElementById('forceStartBtn');
+    orientationWarning = document.getElementById('orientationWarning');
+    forceStartBtn = document.getElementById('forceStartBtn');
     
     // Check if device is in portrait mode
     const isPortrait = window.innerHeight > window.innerWidth;
@@ -98,7 +191,7 @@ function checkOrientation() {
     if (isPortrait) {
         orientationWarning.style.display = 'flex';
         // Hide all game elements
-        document.querySelectorAll('#loadingScreen, #startScreen, #gameContainer, .screen').forEach(el => {
+        document.querySelectorAll('#loadingScreen, #startScreen, .screen').forEach(el => {
             el.style.display = 'none';
         });
     } else {
@@ -118,6 +211,11 @@ function checkOrientation() {
 
 function handleOrientationChange() {
     checkOrientation();
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 }
 
 function getDOMElements() {
@@ -128,7 +226,10 @@ function getDOMElements() {
     instructionsScreen = document.getElementById('instructionsScreen');
     hud = document.getElementById('hud');
     mobileControls = document.getElementById('mobileControls');
-    canvas = document.getElementById('gameCanvas');
+    gameContainer = document.getElementById('gameContainer');
+    fullscreenBtn = document.getElementById('fullscreenBtn');
+    orientationWarning = document.getElementById('orientationWarning');
+    forceStartBtn = document.getElementById('forceStartBtn');
     
     // Buttons
     startGameBtn = document.getElementById('startGameBtn');
@@ -154,6 +255,16 @@ function getDOMElements() {
     // Weapon buttons
     weaponButtons = document.querySelectorAll('.weapon-btn');
     
+    // Audio elements
+    audioElements.backgroundMusic = document.getElementById('backgroundMusic');
+    audioElements.bulletSound = document.getElementById('bulletSound');
+    audioElements.bombSound = document.getElementById('bombSound');
+    audioElements.missileSound = document.getElementById('missileSound');
+    audioElements.explosionSound = document.getElementById('explosionSound');
+    audioElements.hitSound = document.getElementById('hitSound');
+    audioElements.powerupSound = document.getElementById('powerupSound');
+    audioElements.warningSound = document.getElementById('warningSound');
+    
     // Update high score display
     document.getElementById('highScoreDisplay').textContent = gameState.highScore;
     document.getElementById('wavesSurvivedDisplay').textContent = gameState.totalWaves;
@@ -173,6 +284,9 @@ function setupEventListeners() {
     resumeBtn.addEventListener('click', resumeGame);
     restartPauseBtn.addEventListener('click', restartGame);
     menuPauseBtn.addEventListener('click', goToMenu);
+    
+    // Fullscreen button
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
     
     // Add this for orientation support
     if (window.DeviceOrientationEvent) {
@@ -233,6 +347,9 @@ function setupEventListeners() {
                     fireSpecialWeapon();
                 }
                 break;
+            case 'f':
+                toggleFullscreen();
+                break;
         }
     });
     
@@ -253,6 +370,28 @@ function setupEventListeners() {
     
     // Prevent context menu
     document.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+            document.documentElement.msRequestFullscreen();
+        }
+        fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> Exit Fullscreen';
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+        fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> Fullscreen';
+    }
 }
 
 function setupMobileControls() {
@@ -363,156 +502,26 @@ function handleDeviceOrientation(event) {
 }
 
 function setupAudio() {
+    // Preload audio files with optimizations
     try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Create simple sound effects using Web Audio API
-        sounds.bullet = createSound(800, 0.1, 'sawtooth');
-        sounds.bomb = createSound(200, 0.3, 'square');
-        sounds.missile = createSound(400, 0.5, 'sine');
-        sounds.explosion = createExplosionSound();
-        sounds.hit = createHitSound();
-        sounds.powerup = createPowerupSound();
-        sounds.warning = createWarningSound();
-        sounds.background = createBackgroundMusic();
+        audioElements.backgroundMusic.volume = 0.2; // Reduced volume
+        audioElements.bulletSound.volume = 0.1;
+        audioElements.bombSound.volume = 0.3;
+        audioElements.missileSound.volume = 0.2;
+        audioElements.explosionSound.volume = 0.4;
+        audioElements.hitSound.volume = 0.3;
+        audioElements.powerupSound.volume = 0.3;
+        audioElements.warningSound.volume = 0.4;
     } catch (e) {
-        console.log("Web Audio API not supported");
+        console.log("Audio setup error: ", e);
     }
 }
 
-function createSound(frequency, duration, type) {
-    return function() {
-        if (!audioContext) return;
-        
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = frequency;
-        oscillator.type = type;
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + duration);
-    };
-}
-
-function createExplosionSound() {
-    return function() {
-        if (!audioContext) return;
-        
-        for (let i = 0; i < 5; i++) {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = 100 + Math.random() * 100;
-            oscillator.type = 'square';
-            
-            const time = audioContext.currentTime + i * 0.1;
-            gainNode.gain.setValueAtTime(0.2, time);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
-            
-            oscillator.start(time);
-            oscillator.stop(time + 0.5);
-        }
-    };
-}
-
-function createHitSound() {
-    return function() {
-        if (!audioContext) return;
-        
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
-        oscillator.type = 'sawtooth';
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.2);
-    };
-}
-
-function createPowerupSound() {
-    return function() {
-        if (!audioContext) return;
-        
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.3);
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-    };
-}
-
-function createWarningSound() {
-    return function() {
-        if (!audioContext) return;
-        
-        for (let i = 0; i < 3; i++) {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = 600;
-            oscillator.type = 'sine';
-            
-            const time = audioContext.currentTime + i * 0.3;
-            gainNode.gain.setValueAtTime(0.1, time);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
-            
-            oscillator.start(time);
-            oscillator.stop(time + 0.2);
-        }
-    };
-}
-
-function createBackgroundMusic() {
-    return function() {
-        if (!audioContext) return;
-        
-        // Simple ambient background sound
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = 110;
-        oscillator.type = 'sine';
-        
-        gainNode.gain.value = 0.02;
-        
-        oscillator.start();
-        
-        return { oscillator, gainNode };
-    };
+function playSound(soundElement) {
+    if (soundElement) {
+        soundElement.currentTime = 0;
+        soundElement.play().catch(e => console.log("Audio play error: ", e));
+    }
 }
 
 function showLoadingScreen() {
@@ -571,8 +580,8 @@ function startGame() {
     startWave();
     
     // Start background music
-    if (sounds.background) {
-        sounds.background();
+    if (audioElements.backgroundMusic) {
+        audioElements.backgroundMusic.play().catch(e => console.log("Background music error: ", e));
     }
 }
 
@@ -585,14 +594,27 @@ function togglePause() {
         document.getElementById('pauseScore').textContent = gameState.score;
         document.getElementById('pauseWave').textContent = gameState.wave;
         document.getElementById('pauseHealth').textContent = `${Math.round(gameState.health)}%`;
+        
+        // Pause audio
+        if (audioElements.backgroundMusic) {
+            audioElements.backgroundMusic.pause();
+        }
     } else {
         pauseScreen.classList.add('hidden');
+        // Resume audio
+        if (audioElements.backgroundMusic) {
+            audioElements.backgroundMusic.play().catch(e => console.log("Audio resume error: ", e));
+        }
     }
 }
 
 function resumeGame() {
     gameState.paused = false;
     pauseScreen.classList.add('hidden');
+    // Resume audio
+    if (audioElements.backgroundMusic) {
+        audioElements.backgroundMusic.play().catch(e => console.log("Audio resume error: ", e));
+    }
 }
 
 function restartGame() {
@@ -603,12 +625,23 @@ function restartGame() {
     
     resetGame();
     startWave();
+    
+    // Start background music
+    if (audioElements.backgroundMusic) {
+        audioElements.backgroundMusic.play().catch(e => console.log("Background music error: ", e));
+    }
 }
 
 function goToMenu() {
     gameOverScreen.classList.add('hidden');
     pauseScreen.classList.add('hidden');
     showStartScreen();
+    
+    // Stop background music
+    if (audioElements.backgroundMusic) {
+        audioElements.backgroundMusic.pause();
+        audioElements.backgroundMusic.currentTime = 0;
+    }
 }
 
 function resetGame() {
@@ -631,13 +664,27 @@ function resetGame() {
     gameState.speed = 0;
     gameState.lastHealthPack = Date.now();
     
-    // Clear all game objects
-    enemies.forEach(enemy => scene.remove(enemy.mesh));
-    bullets.forEach(bullet => scene.remove(bullet.mesh));
-    bombs.forEach(bomb => scene.remove(bomb.mesh));
-    missiles.forEach(missile => scene.remove(missile.mesh));
-    particles.forEach(particle => scene.remove(particle.mesh));
-    healthPacks.forEach(healthPack => scene.remove(healthPack.mesh));
+    // Clear all game objects using object pools
+    enemies.forEach(enemy => {
+        enemy.mesh.visible = false;
+        scene.remove(enemy.mesh);
+    });
+    
+    // Reset object pools
+    bulletPool.forEach(bullet => {
+        bullet.active = false;
+        bullet.mesh.visible = false;
+    });
+    
+    particlePool.forEach(particle => {
+        particle.active = false;
+        particle.mesh.visible = false;
+    });
+    
+    healthPacks.forEach(healthPack => {
+        healthPack.mesh.visible = false;
+        scene.remove(healthPack.mesh);
+    });
     
     enemies = [];
     bullets = [];
@@ -667,30 +714,37 @@ function initThreeJS() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
     camera.position.set(0, 5, 20);
     
-    // Create renderer
+    // Create renderer with performance optimizations
     renderer = new THREE.WebGLRenderer({ 
-        canvas: canvas,
-        antialias: true,
-        alpha: true
+        antialias: false, // Disable antialiasing for better performance
+        alpha: true,
+        powerPreference: "high-performance"
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = false; // Disable shadows for performance
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
-    // Add lights
+    // Append renderer to game container
+    if (gameContainer) {
+        gameContainer.appendChild(renderer.domElement);
+    } else {
+        document.body.appendChild(renderer.domElement);
+    }
+    
+    // Add lights - Simplified for performance
     const ambientLight = new THREE.AmbientLight(0x333355, 0.6);
     scene.add(ambientLight);
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 5);
-    directionalLight.castShadow = true;
+    directionalLight.castShadow = false; // Disable shadows
     scene.add(directionalLight);
     
-    // Create space frame (bounding box)
+    // Create space frame (bounding box) - Simplified
     createSpaceFrame();
     
-    // Create starfield
+    // Create starfield - Optimized
     createStarfield();
     
     // Create player
@@ -698,7 +752,7 @@ function initThreeJS() {
 }
 
 function createSpaceFrame() {
-    // Create a large cube as the space boundary
+    // Simplified space frame for performance
     const size = 1000;
     const geometry = new THREE.BoxGeometry(size, size, size);
     const edges = new THREE.EdgesGeometry(geometry);
@@ -710,35 +764,14 @@ function createSpaceFrame() {
     
     frame = new THREE.LineSegments(edges, lineMaterial);
     scene.add(frame);
-    
-    // Add corner markers
-    const cornerGeometry = new THREE.SphereGeometry(2, 8, 8);
-    const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-    
-    const corners = [
-        { x: size/2, y: size/2, z: size/2 },
-        { x: -size/2, y: size/2, z: size/2 },
-        { x: size/2, y: -size/2, z: size/2 },
-        { x: size/2, y: size/2, z: -size/2 },
-        { x: -size/2, y: -size/2, z: size/2 },
-        { x: size/2, y: -size/2, z: -size/2 },
-        { x: -size/2, y: size/2, z: -size/2 },
-        { x: -size/2, y: -size/2, z: -size/2 }
-    ];
-    
-    corners.forEach(pos => {
-        const corner = new THREE.Mesh(cornerGeometry, cornerMaterial);
-        corner.position.set(pos.x, pos.y, pos.z);
-        scene.add(corner);
-    });
 }
 
 function createStarfield() {
-    const starCount = 2000;
+    // Optimized starfield with fewer stars
+    const starCount = 500; // Reduced from 2000
     const starGeometry = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
     const starColors = new Float32Array(starCount * 3);
-    const starSizes = new Float32Array(starCount);
     
     for (let i = 0; i < starCount * 3; i += 3) {
         // Random positions within frame
@@ -752,17 +785,13 @@ function createStarfield() {
         starColors[i] = color;
         starColors[i + 1] = color;
         starColors[i + 2] = Math.min(1, color + 0.2);
-        
-        // Random sizes
-        starSizes[i/3] = Math.random() * 2 + 0.5;
     }
     
     starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-    starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
     
     const starMaterial = new THREE.PointsMaterial({
-        size: 1,
+        size: 1.5, // Slightly larger stars
         sizeAttenuation: true,
         vertexColors: true,
         transparent: true,
@@ -777,53 +806,53 @@ function createStarfield() {
 function createPlayer() {
     const group = new THREE.Group();
     
-    // Ship body
-    const bodyGeometry = new THREE.ConeGeometry(0.8, 2, 8);
+    // Simplified ship body for better performance
+    const bodyGeometry = new THREE.ConeGeometry(0.8, 2, 6); // Reduced segments
     const bodyMaterial = new THREE.MeshPhongMaterial({ 
         color: 0x0080ff,
-        shininess: 100,
+        shininess: 50, // Reduced shininess
         emissive: 0x002244,
         emissiveIntensity: 0.3
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.rotation.x = Math.PI / 2;
-    body.castShadow = true;
+    body.castShadow = false; // Disable shadows
     group.add(body);
     
-    // Cockpit
-    const cockpitGeometry = new THREE.SphereGeometry(0.5, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    // Simplified cockpit
+    const cockpitGeometry = new THREE.SphereGeometry(0.5, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2); // Reduced segments
     const cockpitMaterial = new THREE.MeshPhongMaterial({ 
         color: 0x00ffff,
         transparent: true,
         opacity: 0.7,
-        shininess: 100
+        shininess: 50
     });
     const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
     cockpit.position.y = 0.4;
-    cockpit.castShadow = true;
+    cockpit.castShadow = false;
     group.add(cockpit);
     
-    // Wings
+    // Simplified wings
     const wingGeometry = new THREE.BoxGeometry(2.5, 0.1, 1.2);
     const wingMaterial = new THREE.MeshPhongMaterial({ 
         color: 0x0044aa,
-        shininess: 80
+        shininess: 30
     });
     
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
     leftWing.position.x = -1.2;
     leftWing.position.z = -0.6;
-    leftWing.castShadow = true;
+    leftWing.castShadow = false;
     group.add(leftWing);
     
     const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
     rightWing.position.x = 1.2;
     rightWing.position.z = -0.6;
-    rightWing.castShadow = true;
+    rightWing.castShadow = false;
     group.add(rightWing);
     
     // Engines
-    const engineGeometry = new THREE.CylinderGeometry(0.3, 0.4, 1, 8);
+    const engineGeometry = new THREE.CylinderGeometry(0.3, 0.4, 1, 6); // Reduced segments
     const engineMaterial = new THREE.MeshPhongMaterial({ 
         color: 0xff5500,
         emissive: 0x442200,
@@ -842,8 +871,8 @@ function createPlayer() {
     rightEngine.rotation.x = Math.PI / 2;
     group.add(rightEngine);
     
-    // Engine glow
-    const glowGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+    // Engine glow - Simplified
+    const glowGeometry = new THREE.SphereGeometry(0.4, 6, 6); // Reduced segments
     const glowMaterial = new THREE.MeshBasicMaterial({ 
         color: 0xffff00,
         transparent: true,
@@ -864,7 +893,7 @@ function createPlayer() {
     const weaponGeometry = new THREE.BoxGeometry(0.3, 0.3, 1);
     const weaponMaterial = new THREE.MeshPhongMaterial({ 
         color: 0x888888,
-        shininess: 50
+        shininess: 30
     });
     
     const leftWeapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
@@ -926,20 +955,20 @@ function createEnemy(type, position) {
             break;
     }
     
-    // Enemy body
+    // Enemy body - Simplified geometry
     const geometry = type === 'boss' ? 
         new THREE.OctahedronGeometry(size) : 
         new THREE.DodecahedronGeometry(size, 0);
     
     const material = new THREE.MeshPhongMaterial({ 
         color: color,
-        shininess: 30,
+        shininess: 10, // Reduced for performance
         emissive: color,
         emissiveIntensity: 0.2
     });
     
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
+    mesh.castShadow = false; // Disable shadows
     group.add(mesh);
     
     // Enemy AI properties
@@ -981,42 +1010,43 @@ function updateEnemyTarget(enemy) {
 }
 
 function createBullet(position, direction, type = 'bullet') {
-    let geometry, material, speed, size;
+    // Get bullet from pool instead of creating new ones
+    const bullet = getBulletFromPool();
+    if (!bullet) return null; // No available bullets
+    
+    let speed, size, color;
     
     switch(type) {
         case 'bullet':
-            geometry = new THREE.SphereGeometry(0.2, 8, 8);
-            material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
             speed = 2;
             size = 0.2;
+            color = 0x00ffff;
+            playSound(audioElements.bulletSound);
             break;
         case 'bomb':
-            geometry = new THREE.SphereGeometry(0.5, 16, 16);
-            material = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
             speed = 1;
             size = 0.5;
+            color = 0xffaa00;
+            playSound(audioElements.bombSound);
             break;
         case 'missile':
-            geometry = new THREE.ConeGeometry(0.3, 1, 8);
-            material = new THREE.MeshBasicMaterial({ color: 0xff55ff });
             speed = 1.5;
             size = 0.3;
+            color = 0xff55ff;
+            playSound(audioElements.missileSound);
             break;
     }
     
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    
-    const bullet = {
-        mesh: mesh,
-        position: position.clone(),
-        velocity: direction.clone().normalize().multiplyScalar(speed),
-        type: type,
-        size: size,
-        homing: type === 'missile',
-        target: null,
-        lifeTime: type === 'missile' ? 5 : 3 // Missiles have longer life
-    };
+    // Configure the bullet from pool
+    bullet.mesh.position.copy(position);
+    bullet.mesh.material.color.set(color);
+    bullet.position.copy(position);
+    bullet.velocity.copy(direction.clone().normalize().multiplyScalar(speed));
+    bullet.type = type;
+    bullet.size = size;
+    bullet.homing = type === 'missile';
+    bullet.target = null;
+    bullet.lifeTime = type === 'missile' ? 5 : 3;
     
     if (type === 'missile' && enemies.length > 0) {
         // Find nearest enemy for homing
@@ -1031,65 +1061,47 @@ function createBullet(position, direction, type = 'bullet') {
     }
     
     bullets.push(bullet);
-    scene.add(mesh);
-    
-    // Play sound
-    if (sounds[type]) {
-        sounds[type]();
-    }
-    
     return bullet;
 }
 
 function createEnemyBullet(position, direction, type = 'small') {
+    const bullet = getBulletFromPool();
+    if (!bullet) return null;
+    
     const size = type === 'large' ? 0.4 : 0.2;
     const color = type === 'large' ? 0xff5555 : 0xff8888;
     const damage = type === 'large' ? 20 : 10;
     
-    const geometry = new THREE.SphereGeometry(size, 8, 8);
-    const material = new THREE.MeshBasicMaterial({ color: color });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    
-    const bullet = {
-        mesh: mesh,
-        position: position.clone(),
-        velocity: direction.clone().normalize().multiplyScalar(type === 'large' ? 1 : 1.5),
-        type: type,
-        damage: damage,
-        size: size
-    };
+    bullet.mesh.position.copy(position);
+    bullet.mesh.material.color.set(color);
+    bullet.position.copy(position);
+    bullet.velocity.copy(direction.clone().normalize().multiplyScalar(type === 'large' ? 1 : 1.5));
+    bullet.type = type;
+    bullet.damage = damage;
+    bullet.size = size;
+    bullet.homing = false;
+    bullet.lifeTime = 2;
     
     bullets.push(bullet);
-    scene.add(mesh);
-    
     return bullet;
 }
 
 function createParticle(position, color, size, velocity, lifeTime = 1.0) {
-    const geometry = new THREE.SphereGeometry(size, 4, 4);
-    const material = new THREE.MeshBasicMaterial({ 
-        color: color,
-        transparent: true,
-        opacity: 1.0
-    });
+    // Get particle from pool
+    const particle = getParticleFromPool();
+    if (!particle) return null;
     
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    
-    const particle = {
-        mesh: mesh,
-        position: position.clone(),
-        velocity: velocity.clone(),
-        color: new THREE.Color(color),
-        lifeTime: lifeTime,
-        maxLifeTime: lifeTime,
-        size: size
-    };
+    particle.mesh.position.copy(position);
+    particle.mesh.material.color.set(color);
+    particle.mesh.material.opacity = 1.0;
+    particle.position.copy(position);
+    particle.velocity.copy(velocity);
+    particle.color.set(color);
+    particle.lifeTime = lifeTime;
+    particle.maxLifeTime = lifeTime;
+    particle.size = size;
     
     particles.push(particle);
-    scene.add(mesh);
-    
     return particle;
 }
 
@@ -1097,7 +1109,7 @@ function createHealthPack(position) {
     const geometry = new THREE.OctahedronGeometry(1);
     const material = new THREE.MeshPhongMaterial({ 
         color: 0xff0000,
-        shininess: 100,
+        shininess: 50,
         emissive: 0x220000,
         transparent: true,
         opacity: 0.9
@@ -1120,6 +1132,8 @@ function createHealthPack(position) {
     const notice = document.getElementById('healthPickupNotice');
     notice.classList.remove('hidden');
     setTimeout(() => notice.classList.add('hidden'), 3000);
+    
+    playSound(audioElements.powerupSound);
     
     return healthPack;
 }
@@ -1200,7 +1214,7 @@ function fireSpecialWeapon() {
 }
 
 function startWave() {
-    const enemyCount = 5 + gameState.wave * 2;
+    const enemyCount = Math.min(5 + gameState.wave * 2, 20); // Limit maximum enemies
     gameState.enemiesRemaining = enemyCount;
     
     // Check for boss wave
@@ -1212,7 +1226,7 @@ function startWave() {
         // Show boss warning
         const warning = document.getElementById('bossWarning');
         warning.classList.remove('hidden');
-        if (sounds.warning) sounds.warning();
+        playSound(audioElements.warningSound);
         setTimeout(() => warning.classList.add('hidden'), 3000);
     } else {
         gameState.bossActive = false;
@@ -1248,8 +1262,8 @@ function updatePlayer(deltaTime) {
     
     // Handle rotation from joystick
     if (joystickRotate.active) {
-        player.mesh.rotation.y -= joystickRotate.x * gameState.rotationSpeed;
-        player.mesh.rotation.x += joystickRotate.y * gameState.rotationSpeed;
+        player.mesh.rotation.y -= joystickRotate.x * gameState.rotationSpeed * 60 * deltaTime;
+        player.mesh.rotation.x += joystickRotate.y * gameState.rotationSpeed * 60 * deltaTime;
     }
     
     // Handle device orientation rotation
@@ -1268,9 +1282,9 @@ function updatePlayer(deltaTime) {
     
     // Update speed
     if (moveForce.length() > 0) {
-        gameState.speed = Math.min(gameState.maxSpeed, gameState.speed + deltaTime * 10);
+        gameState.speed = Math.min(gameState.maxSpeed, gameState.speed + deltaTime * 600);
     } else {
-        gameState.speed = Math.max(0, gameState.speed - deltaTime * 5);
+        gameState.speed = Math.max(0, gameState.speed - deltaTime * 300);
     }
     
     // Apply movement based on forward direction and speed
@@ -1279,7 +1293,7 @@ function updatePlayer(deltaTime) {
     forward.multiplyScalar(gameState.speed * deltaTime);
     
     player.mesh.position.add(forward);
-    player.mesh.position.add(moveForce.multiplyScalar(deltaTime * 10));
+    player.mesh.position.add(moveForce.multiplyScalar(deltaTime * 600));
     
     // Keep player within bounds
     const bounds = 400;
@@ -1317,7 +1331,7 @@ function updateEnemies(deltaTime) {
         // Face player
         enemy.mesh.lookAt(player.mesh.position);
         
-        // Enemy firing
+        // Enemy firing - Reduce frequency for performance
         if (now - enemy.lastShot > 1000 / enemy.fireRate) {
             const toPlayer = new THREE.Vector3().subVectors(player.mesh.position, enemy.mesh.position).normalize();
             
@@ -1328,9 +1342,9 @@ function updateEnemies(deltaTime) {
             enemy.lastShot = now;
         }
         
-        // Rotate enemy for visual effect
-        enemy.mesh.rotation.x += 0.01;
-        enemy.mesh.rotation.y += 0.01;
+        // Rotate enemy for visual effect - Reduced frequency
+        enemy.mesh.rotation.x += 0.01 * deltaTime * 60;
+        enemy.mesh.rotation.y += 0.01 * deltaTime * 60;
         
         // Check bounds
         const bounds = 500;
@@ -1396,6 +1410,11 @@ function updateBullets(deltaTime) {
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
         
+        if (!bullet.active) {
+            bullets.splice(i, 1);
+            continue;
+        }
+        
         // Update homing missiles
         if (bullet.homing && bullet.target) {
             const direction = new THREE.Vector3().subVectors(bullet.target.mesh.position, bullet.position).normalize();
@@ -1403,7 +1422,7 @@ function updateBullets(deltaTime) {
         }
         
         // Update position
-        bullet.position.add(bullet.velocity);
+        bullet.position.add(bullet.velocity.clone().multiplyScalar(deltaTime * 60));
         bullet.mesh.position.copy(bullet.position);
         
         // Rotate missiles
@@ -1414,7 +1433,8 @@ function updateBullets(deltaTime) {
         // Check lifetime
         bullet.lifeTime -= deltaTime;
         if (bullet.lifeTime <= 0) {
-            scene.remove(bullet.mesh);
+            bullet.active = false;
+            bullet.mesh.visible = false;
             bullets.splice(i, 1);
         }
         
@@ -1423,7 +1443,8 @@ function updateBullets(deltaTime) {
         if (Math.abs(bullet.position.x) > bounds || 
             Math.abs(bullet.position.y) > bounds || 
             Math.abs(bullet.position.z) > bounds) {
-            scene.remove(bullet.mesh);
+            bullet.active = false;
+            bullet.mesh.visible = false;
             bullets.splice(i, 1);
         }
     }
@@ -1433,7 +1454,12 @@ function updateParticles(deltaTime) {
     for (let i = particles.length - 1; i >= 0; i--) {
         const particle = particles[i];
         
-        particle.position.add(particle.velocity);
+        if (!particle.active) {
+            particles.splice(i, 1);
+            continue;
+        }
+        
+        particle.position.add(particle.velocity.clone().multiplyScalar(deltaTime * 60));
         particle.mesh.position.copy(particle.position);
         
         particle.lifeTime -= deltaTime;
@@ -1443,7 +1469,8 @@ function updateParticles(deltaTime) {
         particle.mesh.scale.setScalar(particle.size * alpha);
         
         if (particle.lifeTime <= 0) {
-            scene.remove(particle.mesh);
+            particle.active = false;
+            particle.mesh.visible = false;
             particles.splice(i, 1);
         }
     }
@@ -1454,9 +1481,9 @@ function updateHealthPacks(deltaTime) {
         const healthPack = healthPacks[i];
         
         // Rotate
-        healthPack.mesh.rotation.x += healthPack.rotation.x;
-        healthPack.mesh.rotation.y += healthPack.rotation.y;
-        healthPack.mesh.rotation.z += healthPack.rotation.z;
+        healthPack.mesh.rotation.x += healthPack.rotation.x * deltaTime * 60;
+        healthPack.mesh.rotation.y += healthPack.rotation.y * deltaTime * 60;
+        healthPack.mesh.rotation.z += healthPack.rotation.z * deltaTime * 60;
         
         // Pulsate
         const scale = 1 + Math.sin(Date.now() * 0.005) * 0.2;
@@ -1472,9 +1499,9 @@ function updateHealthPacks(deltaTime) {
         }
     }
     
-    // Spawn health packs randomly
+    // Spawn health packs randomly - Reduced frequency
     const now = Date.now();
-    if (now - gameState.lastHealthPack > 30000 && healthPacks.length < 3 && Math.random() < 0.01) {
+    if (now - gameState.lastHealthPack > 30000 && healthPacks.length < 2 && Math.random() < 0.005) {
         const position = new THREE.Vector3(
             (Math.random() - 0.5) * 300,
             (Math.random() - 0.5) * 300,
@@ -1486,13 +1513,15 @@ function updateHealthPacks(deltaTime) {
 }
 
 function checkCollisions() {
-    // Player bullets vs enemies
+    // Player bullets vs enemies - Optimized collision detection
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
+        if (!bullet.active || bullet.type === 'small' || bullet.type === 'large') continue;
         
         for (let j = enemies.length - 1; j >= 0; j--) {
             const enemy = enemies[j];
             
+            // Fast distance check before more expensive collision
             const distance = bullet.position.distanceTo(enemy.mesh.position);
             const hitDistance = bullet.size + (enemy.type === 'boss' ? 3 : 1);
             
@@ -1508,8 +1537,8 @@ function checkCollisions() {
                 enemy.health -= damage;
                 gameState.shotsHit++;
                 
-                // Create hit effect
-                for (let k = 0; k < 10; k++) {
+                // Create hit effect - Reduced particles
+                for (let k = 0; k < 3; k++) {
                     createParticle(
                         bullet.position.clone(),
                         bullet.type === 'bomb' ? 0xffaa00 : 0x00ffff,
@@ -1524,13 +1553,14 @@ function checkCollisions() {
                 }
                 
                 // Remove bullet
-                scene.remove(bullet.mesh);
+                bullet.active = false;
+                bullet.mesh.visible = false;
                 bullets.splice(i, 1);
                 
                 // Check if enemy is destroyed
                 if (enemy.health <= 0) {
-                    // Create explosion
-                    for (let k = 0; k < 30; k++) {
+                    // Create explosion - Reduced particles
+                    for (let k = 0; k < 8; k++) {
                         createParticle(
                             enemy.mesh.position.clone(),
                             enemy.type === 'boss' ? 0xff00ff : 0xff5500,
@@ -1558,14 +1588,14 @@ function checkCollisions() {
                     gameState.enemiesRemaining--;
                     
                     // Play explosion sound
-                    if (sounds.explosion) sounds.explosion();
+                    playSound(audioElements.explosionSound);
                     
                     // Remove enemy
                     scene.remove(enemy.mesh);
                     enemies.splice(j, 1);
                 } else {
                     // Play hit sound
-                    if (sounds.hit) sounds.hit();
+                    playSound(audioElements.hitSound);
                 }
                 
                 break;
@@ -1576,6 +1606,7 @@ function checkCollisions() {
     // Enemy bullets vs player
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
+        if (!bullet.active) continue;
         
         if (bullet.type === 'small' || bullet.type === 'large') {
             const distance = bullet.position.distanceTo(player.mesh.position);
@@ -1587,8 +1618,8 @@ function checkCollisions() {
                 if (gameState.shields > 0) {
                     gameState.shields -= damage;
                     
-                    // Create shield hit effect
-                    for (let j = 0; j < 10; j++) {
+                    // Create shield hit effect - Reduced particles
+                    for (let j = 0; j < 3; j++) {
                         createParticle(
                             bullet.position.clone(),
                             0x00aaff,
@@ -1604,8 +1635,8 @@ function checkCollisions() {
                 } else {
                     gameState.health -= damage;
                     
-                    // Create hull hit effect
-                    for (let j = 0; j < 10; j++) {
+                    // Create hull hit effect - Reduced particles
+                    for (let j = 0; j < 3; j++) {
                         createParticle(
                             bullet.position.clone(),
                             0xff5500,
@@ -1628,15 +1659,16 @@ function checkCollisions() {
                         
                         // Show warning
                         document.getElementById('lowHealthWarning').classList.remove('hidden');
-                        if (sounds.warning) sounds.warning();
+                        playSound(audioElements.warningSound);
                     }
                 }
                 
                 // Play hit sound
-                if (sounds.hit) sounds.hit();
+                playSound(audioElements.hitSound);
                 
                 // Remove bullet
-                scene.remove(bullet.mesh);
+                bullet.active = false;
+                bullet.mesh.visible = false;
                 bullets.splice(i, 1);
                 
                 // Check if player is destroyed
@@ -1656,8 +1688,8 @@ function checkCollisions() {
             // Collect health pack
             gameState.health = Math.min(100, gameState.health + healthPack.value);
             
-            // Create collection effect
-            for (let j = 0; j < 20; j++) {
+            // Create collection effect - Reduced particles
+            for (let j = 0; j < 8; j++) {
                 createParticle(
                     healthPack.mesh.position.clone(),
                     0xff0000,
@@ -1672,7 +1704,7 @@ function checkCollisions() {
             }
             
             // Play powerup sound
-            if (sounds.powerup) sounds.powerup();
+            playSound(audioElements.powerupSound);
             
             // Remove health pack
             scene.remove(healthPack.mesh);
@@ -1693,8 +1725,8 @@ function checkCollisions() {
             // Collision damage
             gameState.health -= 30;
             
-            // Create collision effect
-            for (let j = 0; j < 20; j++) {
+            // Create collision effect - Reduced particles
+            for (let j = 0; j < 8; j++) {
                 createParticle(
                     player.mesh.position.clone(),
                     0xff0000,
@@ -1723,7 +1755,7 @@ function checkCollisions() {
                 gameState.score += enemy.type === 'boss' ? 5000 : 200;
                 gameState.enemiesKilled++;
                 
-                if (sounds.explosion) sounds.explosion();
+                playSound(audioElements.explosionSound);
             }
             
             // Check if player is destroyed
@@ -1801,8 +1833,8 @@ function checkWaveCompletion() {
 function gameOver() {
     gameState.gameOver = true;
     
-    // Create explosion effect
-    for (let i = 0; i < 50; i++) {
+    // Create explosion effect - Reduced particles
+    for (let i = 0; i < 15; i++) {
         createParticle(
             player.mesh.position.clone(),
             0xff5500,
@@ -1847,6 +1879,15 @@ function gameOver() {
     document.getElementById('finalAccuracy').textContent = `${accuracy}%`;
     document.getElementById('rankValue').textContent = rank;
     
+    // Stop background music
+    if (audioElements.backgroundMusic) {
+        audioElements.backgroundMusic.pause();
+        audioElements.backgroundMusic.currentTime = 0;
+    }
+    
+    // Play explosion sound
+    playSound(audioElements.explosionSound);
+    
     // Show game over screen
     setTimeout(() => {
         hud.classList.add('hidden');
@@ -1865,10 +1906,12 @@ function onWindowResize() {
     }
 }
 
-function animate() {
+function animate(currentTime) {
     requestAnimationFrame(animate);
     
-    const deltaTime = 0.016; // Approximate 60fps
+    // Calculate delta time
+    const deltaTime = lastTime ? (currentTime - lastTime) / 1000 : 0;
+    lastTime = currentTime;
     
     // Skip updates if game is paused or over
     if (gameState.paused || gameState.gameOver) {
@@ -1876,36 +1919,45 @@ function animate() {
         return;
     }
     
-    // Update game objects
-    updatePlayer(deltaTime);
-    updateEnemies(deltaTime);
-    updateBullets(deltaTime);
-    updateParticles(deltaTime);
-    updateHealthPacks(deltaTime);
+    // Fixed time step for consistent physics
+    accumulator += deltaTime;
     
-    // Check collisions
-    checkCollisions();
-    
-    // Check wave completion
-    checkWaveCompletion();
-    
-    // Rotate space frame and stars slowly
-    if (frame) {
-        frame.rotation.y += 0.0001;
-        frame.rotation.x += 0.00005;
+    while (accumulator >= fixedTimeStep) {
+        // Update game objects with fixed time step
+        updatePlayer(fixedTimeStep);
+        updateEnemies(fixedTimeStep);
+        updateBullets(fixedTimeStep);
+        updateParticles(fixedTimeStep);
+        updateHealthPacks(fixedTimeStep);
+        
+        // Check collisions
+        checkCollisions();
+        
+        // Check wave completion
+        checkWaveCompletion();
+        
+        // Rotate space frame and stars slowly
+        if (frame) {
+            frame.rotation.y += 0.0001 * fixedTimeStep * 60;
+            frame.rotation.x += 0.00005 * fixedTimeStep * 60;
+        }
+        
+        stars.forEach(starField => {
+            starField.rotation.y += 0.00005 * fixedTimeStep * 60;
+        });
+        
+        // Regenerate shields slowly
+        if (gameState.shields < gameState.maxShields) {
+            gameState.shields = Math.min(gameState.maxShields, gameState.shields + fixedTimeStep * 5);
+        }
+        
+        accumulator -= fixedTimeStep;
     }
     
-    stars.forEach(starField => {
-        starField.rotation.y += 0.00005;
-    });
-    
-    // Regenerate shields slowly
-    if (gameState.shields < gameState.maxShields) {
-        gameState.shields = Math.min(gameState.maxShields, gameState.shields + deltaTime * 5);
+    // Update HUD (less frequently for performance)
+    if (currentTime % 100 < 16) { // Update HUD at ~60fps
+        updateHUD();
     }
-    
-    // Update HUD
-    updateHUD();
     
     // Render scene
     renderer.render(scene, camera);
