@@ -1710,3 +1710,52 @@ canvas {
         justify-content: center;
     }
 }
+/* Mobile Controls */
+#mobileControls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    pointer-events: auto;
+    z-index: 2000;
+}
+
+#leftJoystick {
+    position: absolute;
+    bottom: 60px;
+    left: 35px;
+    width: 130px;
+    height: 130px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+}
+
+#leftJoystick .stick {
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 200, 255, 0.8);
+    border-radius: 50%;
+    position: absolute;
+    top: 35px;
+    left: 35px;
+}
+
+.right-buttons {
+    position: absolute;
+    bottom: 40px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.touch-btn {
+    width: 110px;
+    height: 55px;
+    border-radius: 10px;
+    font-size: 1.3rem;
+    border: none;
+    background: rgba(0, 150, 250, 0.6);
+    color: white;
+    font-weight: bold;
+}

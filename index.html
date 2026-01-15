@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     
-    <!-- Three.js and related libraries -->
+    <!-- Three.js and related libraries - UPDATED VERSIONS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.min.js"></script>
@@ -73,7 +73,7 @@
     </div>
     
     <!-- Main Menu -->
-    <div id="mainMenu" class="screen hidden">
+    <div id="mainMenuScreen" class="screen hidden">
         <div class="menu-content">
             <div class="menu-header">
                 <h1 class="game-title">GALACTIC WAR</h1>
@@ -325,7 +325,19 @@
             </div>
         </div>
     </div>
-    
+    <!-- Mobile Touch Controls -->
+<div id="mobileControls" class="hidden">
+    <div id="leftJoystick" class="joystick">
+        <div class="stick"></div>
+    </div>
+
+    <div class="right-buttons">
+        <button id="fireBtn" class="touch-btn">FIRE</button>
+        <button id="bombBtn" class="touch-btn">BOMB</button>
+        <button id="missileBtn" class="touch-btn">MISSILE</button>
+        <button id="boostBtn" class="touch-btn">BOOST</button>
+    </div>
+</div>
     <!-- Damage Overlay -->
     <div id="damageOverlay" class="hidden"></div>
     
@@ -539,5 +551,75 @@
     
     <!-- Game Script -->
     <script src="script.js"></script>
+    <script>
+      
+
+    function enableMobileControls() {
+
+    // JOYSTICK LOGIC
+    const joystick = document.getElementById("leftJoystick");
+    const stick = joystick.querySelector(".stick");
+    let joyActive = false;
+
+    joystick.addEventListener("touchstart", (e) => {
+        joyActive = true;
+    });
+
+    joystick.addEventListener("touchmove", (e) => {
+        if (!joyActive) return;
+
+        const rect = joystick.getBoundingClientRect();
+        const touch = e.touches[0];
+
+        const x = touch.clientX - (rect.left + rect.width / 2);
+        const y = touch.clientY - (rect.top + rect.height / 2);
+
+        const distance = Math.min(50, Math.sqrt(x*x + y*y));
+        const angle = Math.atan2(y, x);
+
+        // Move the stick
+        stick.style.left = 35 + Math.cos(angle) * distance + "px";
+        stick.style.top = 35 + Math.sin(angle) * distance + "px";
+
+        // Apply movement
+        keys["ArrowUp"] = y < -10;
+        keys["ArrowDown"] = y > 10;
+        keys["ArrowLeft"] = x < -10;
+        keys["ArrowRight"] = x > 10;
+    });
+
+    joystick.addEventListener("touchend", () => {
+        joyActive = false;
+        stick.style.left = "35px";
+        stick.style.top = "35px";
+
+        keys["ArrowUp"] = false;
+        keys["ArrowDown"] = false;
+        keys["ArrowLeft"] = false;
+        keys["ArrowRight"] = false;
+    });
+
+    // FIRE BUTTONS
+    document.getElementById("fireBtn").addEventListener("touchstart", () => {
+        fireBullet();
+    });
+
+    document.getElementById("bombBtn").addEventListener("touchstart", () => {
+        fireBomb();
+    });
+
+    document.getElementById("missileBtn").addEventListener("touchstart", () => {
+        fireMissile();
+    });
+
+    document.getElementById("boostBtn").addEventListener("touchstart", () => {
+        isBoosting = true;
+    });
+
+    document.getElementById("boostBtn").addEventListener("touchend", () => {
+        isBoosting = false;
+    });
+}
+    </script>
 </body>
 </html>

@@ -100,7 +100,11 @@ function initGame() {
     
     // Setup event listeners
     setupEventListeners();
-    
+    // Show mobile controls when on touchscreen
+if ('ontouchstart' in window) {
+    document.getElementById('mobileControls').classList.remove('hidden');
+    enableMobileControls();
+}
     // Initialize Three.js
     initThreeJS();
     
@@ -198,9 +202,6 @@ function initThreeJS() {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = CONFIG.SHADOWS;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1;
         
         const gameContainer = document.getElementById('gameContainer');
         if (gameContainer) {
@@ -215,12 +216,46 @@ function initThreeJS() {
         createStarfield();
         
         console.log("Three.js initialized successfully!");
+        
+        // Start rendering loop even when not in game
+        if (!animationFrameId) {
+            renderLoop();
+        }
     } catch (error) {
         console.error("Error initializing Three.js:", error);
+        // Fallback to basic rendering
+        fallbackGraphics();
     }
+}
+
+function fallbackGraphics() {
+    console.log("Using fallback graphics mode...");
     
-    // Handle window resize
-    window.addEventListener('resize', onWindowResize);
+    // Create simple scene
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    document.getElementById('gameContainer').appendChild(renderer.domElement);
+    
+    // Simple lighting
+    const light = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(light);
+    
+    // Start render loop
+    if (!animationFrameId) {
+        renderLoop();
+    }
+}
+
+function renderLoop() {
+    animationFrameId = requestAnimationFrame(renderLoop);
+    
+    // Only render if we have a scene
+    if (scene && camera && renderer) {
+        renderer.render(scene, camera);
+    }
 }
 
 function setupLighting() {
@@ -668,8 +703,11 @@ function startNewGame() {
     updateWaypointDisplay();
     
     // Start game loop
-    if (!gameState.isPaused) {
+    if (!gameState.isPaused && renderer && scene && camera) {
+        console.log("Starting game animation loop...");
         animate();
+    } else {
+        console.error("Cannot start game: Missing renderer, scene, or camera");
     }
     
     console.log("New game started!");
@@ -677,9 +715,20 @@ function startNewGame() {
 
 function clearScene() {
     try {
-        // Remove all objects from scene
-        while(scene.children.length > 0) {
-            const object = scene.children[0];
+        // Remove all objects from scene except camera and lights
+        const objectsToRemove = [];
+        
+        scene.children.forEach(object => {
+            // Keep camera and basic lights
+            if (!object.isCamera && 
+                !object.isLight && 
+                object.type !== 'AmbientLight' && 
+                object.type !== 'DirectionalLight') {
+                objectsToRemove.push(object);
+            }
+        });
+        
+        objectsToRemove.forEach(object => {
             if (object.geometry) object.geometry.dispose();
             if (object.material) {
                 if (Array.isArray(object.material)) {
@@ -689,7 +738,7 @@ function clearScene() {
                 }
             }
             scene.remove(object);
-        }
+        });
         
         // Clear arrays
         waypoints = [];
@@ -1536,11 +1585,11 @@ function updateHUD() {
         
         // Update speed
         const speedValue = document.getElementById('speedValue');
-        if (speedValue) speedValue.textContent = Math.round(playerShip?.speed || 0);
+        if (speedValue && playerShip) speedValue.textContent = Math.round(playerShip.speed || 0);
         
         // Update waypoint distance
         const waypointDistance = document.getElementById('waypointDistance');
-        if (waypointDistance && waypoints[gameState.currentWaypoint - 1]) {
+        if (waypointDistance && waypoints[gameState.currentWaypoint - 1] && playerShip) {
             const distance = playerShip.mesh.position.distanceTo(waypoints[gameState.currentWaypoint - 1].position);
             waypointDistance.textContent = Math.round(distance) + 'm';
         }
@@ -1841,6 +1890,9 @@ function saveSettings() {
 
 function animate() {
     if (!gameState.missionStarted || gameState.isPaused || gameState.isGameOver || !renderer || !scene || !camera) {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
         animationFrameId = requestAnimationFrame(animate);
         return;
     }
