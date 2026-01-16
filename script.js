@@ -1,13 +1,13 @@
 // Ariq Azmain's Galactic War - Mission Edition
-// Complete Game System with Enhanced Graphics and AI
+// Fixed Version - Game Start Issues Resolved
 
 // Game Configuration
 const CONFIG = {
     // Graphics Settings
     SHADOWS: true,
-    BLOOM: true,
+    BLOOM: false, // Disabled for performance
     PARTICLES: true,
-    POST_PROCESSING: true,
+    POST_PROCESSING: false, // Disabled for performance
     
     // Game Settings
     PLAYER_SPEED: 50,
@@ -18,8 +18,8 @@ const CONFIG = {
     BULLET_SPEED: 100,
     BOMB_SPEED: 60,
     MISSILE_SPEED: 80,
-    BOMB_RELOAD_TIME: 5000, // 5 seconds
-    MISSILE_RELOAD_TIME: 10000, // 10 seconds
+    BOMB_RELOAD_TIME: 5000,
+    MISSILE_RELOAD_TIME: 10000,
     
     // Mission Settings
     WAYPOINT_DISTANCE: 1000,
@@ -28,7 +28,7 @@ const CONFIG = {
     
     // Enemy Settings
     ENEMY_SPEED: 20,
-    ENEMY_FIRE_RATE: 1000, // ms
+    ENEMY_FIRE_RATE: 2000, // Increased for easier gameplay
     ENEMY_DAMAGE: 10
 };
 
@@ -40,6 +40,7 @@ let gameState = {
     missionStarted: false,
     currentWaypoint: 1,
     missionComplete: false,
+    missionStartTime: null,
     
     player: {
         health: 100,
@@ -50,7 +51,9 @@ let gameState = {
         kills: 0,
         distance: 0,
         position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 }
+        rotation: { x: 0, y: 0, z: 0 },
+        bulletsFired: 0,
+        hits: 0
     },
     
     weapons: {
@@ -76,37 +79,62 @@ let gameState = {
         masterVolume: 0.8,
         musicVolume: 0.7,
         sfxVolume: 0.9,
-        autoAim: true
+        voiceVolume: 0.85,
+        autoAim: true,
+        aiVoice: true,
+        audioEnabled: false // Audio disabled by default
+    },
+    
+    audio: {
+        enabled: false, // Disabled due to browser restrictions
+        backgroundMusic: null,
+        bulletSound: null,
+        explosionSound: null,
+        missileSound: null,
+        healthSound: null,
+        warningSound: null,
+        victorySound: null
     }
 };
 
 // Three.js Variables
-let scene, camera, renderer, composer;
+let scene, camera, renderer;
 let playerShip, waypoints = [], enemies = [], asteroids = [], healthPacks = [];
 let bullets = [], bombs = [], missiles = [];
 let clock = new THREE.Clock();
 let deltaTime = 0;
-let bloomPass;
+let animationFrameId = null;
 
 // Input State
 let keys = {};
 let mouse = { x: 0, y: 0, down: false };
 let isBoosting = false;
-let animationFrameId = null;
+
+// Mobile Controls
+let joystickActive = false;
+let joystickX = 0;
+let joystickY = 0;
 
 // Initialize Game
 function initGame() {
     console.log("Initializing game...");
     
-    // Setup event listeners
+    // Setup event listeners first
     setupEventListeners();
-    // Show mobile controls when on touchscreen
-if ('ontouchstart' in window) {
-    document.getElementById('mobileControls').classList.remove('hidden');
-    enableMobileControls();
-}
+    
     // Initialize Three.js
     initThreeJS();
+    
+    // Initialize audio system (simplified)
+    initAudioSystem();
+    
+    // Show mobile controls when on touchscreen
+    if ('ontouchstart' in window) {
+        setTimeout(() => {
+            document.getElementById('mobileControls').classList.remove('hidden');
+            initMobileControls();
+        }, 1000);
+    }
     
     // Start loading simulation
     simulateLoading();
@@ -121,13 +149,12 @@ function simulateLoading() {
         "Loading Graphics System...",
         "Setting Up Mission Environment...",
         "Preparing AI Systems...",
-        "Loading Audio Assets...",
         "Finalizing Systems...",
         "Ready for Mission!"
     ];
     
     const interval = setInterval(() => {
-        progress += Math.random() * 15 + 5;
+        progress += Math.random() * 20 + 5;
         if (progress >= 100) {
             progress = 100;
             clearInterval(interval);
@@ -153,6 +180,11 @@ function simulateLoading() {
 function loadingComplete() {
     console.log("Loading complete!");
     
+    // Show welcome message
+    if (gameState.settings.aiVoice) {
+        showAITextResponse("Welcome to Galactic War, Commander Ariq Azmain. Your mission is ready. Good luck!");
+    }
+    
     // Hide loading screen
     document.getElementById('loadingScreen').classList.add('hidden');
     
@@ -161,6 +193,38 @@ function loadingComplete() {
     
     // Load saved data
     loadSavedData();
+    
+    // Update audio status
+    document.getElementById('audioStatus').classList.remove('active');
+}
+
+function initAudioSystem() {
+    console.log("Initializing audio system in fallback mode...");
+    
+    // Set audio to disabled
+    gameState.audio.enabled = false;
+    gameState.settings.audioEnabled = false;
+    
+    // Update UI
+    document.getElementById('audioStatus').classList.remove('active');
+    document.getElementById('audioStatus').innerHTML = '<i class="fas fa-volume-mute"></i><span>AUDIO</span>';
+    
+    console.log("Audio system initialized in fallback mode!");
+}
+
+function showAITextResponse(text) {
+    const aiResponse = document.getElementById('aiVoiceResponse');
+    const aiMessage = document.getElementById('aiMessage');
+    
+    if (aiResponse && aiMessage) {
+        aiMessage.textContent = text;
+        aiResponse.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            aiResponse.classList.add('hidden');
+        }, 5000);
+    }
 }
 
 function showScreen(screenName) {
@@ -170,6 +234,10 @@ function showScreen(screenName) {
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.add('hidden');
     });
+    
+    // Hide popups
+    document.getElementById('congratulationsPopup').classList.add('hidden');
+    document.getElementById('aiVoiceResponse').classList.add('hidden');
     
     // Show requested screen
     const screenElement = document.getElementById(screenName + 'Screen');
@@ -185,6 +253,7 @@ function initThreeJS() {
     try {
         // Create scene
         scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000011);
         scene.fog = new THREE.Fog(0x000011, 100, 2000);
         
         // Create camera
@@ -192,7 +261,7 @@ function initThreeJS() {
         camera.position.set(0, 10, 50);
         camera.lookAt(0, 0, 0);
         
-        // Create renderer
+        // Create renderer with simpler settings
         renderer = new THREE.WebGLRenderer({ 
             antialias: true, 
             alpha: true,
@@ -201,11 +270,10 @@ function initThreeJS() {
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = CONFIG.SHADOWS;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
         const gameContainer = document.getElementById('gameContainer');
         if (gameContainer) {
-            gameContainer.innerHTML = ''; // Clear previous canvas if exists
+            gameContainer.innerHTML = '';
             gameContainer.appendChild(renderer.domElement);
         }
         
@@ -217,13 +285,9 @@ function initThreeJS() {
         
         console.log("Three.js initialized successfully!");
         
-        // Start rendering loop even when not in game
-        if (!animationFrameId) {
-            renderLoop();
-        }
     } catch (error) {
         console.error("Error initializing Three.js:", error);
-        // Fallback to basic rendering
+        // Create simple fallback
         fallbackGraphics();
     }
 }
@@ -233,7 +297,11 @@ function fallbackGraphics() {
     
     // Create simple scene
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 10, 50);
+    
     renderer = new THREE.WebGLRenderer({ alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     
@@ -242,38 +310,19 @@ function fallbackGraphics() {
     // Simple lighting
     const light = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(light);
-    
-    // Start render loop
-    if (!animationFrameId) {
-        renderLoop();
-    }
-}
-
-function renderLoop() {
-    animationFrameId = requestAnimationFrame(renderLoop);
-    
-    // Only render if we have a scene
-    if (scene && camera && renderer) {
-        renderer.render(scene, camera);
-    }
 }
 
 function setupLighting() {
     // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x333355, 0.4);
+    const ambientLight = new THREE.AmbientLight(0x333355, 0.6);
     scene.add(ambientLight);
     
-    // Directional light (sun)
+    // Directional light
     const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
     sunLight.position.set(100, 100, 50);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 500;
     scene.add(sunLight);
     
-    // Point light for player ship glow
+    // Player light
     const playerLight = new THREE.PointLight(0x00a0ff, 1, 100);
     playerLight.position.set(0, 0, 0);
     scene.add(playerLight);
@@ -281,36 +330,24 @@ function setupLighting() {
 
 function createStarfield() {
     try {
-        const starGeometry = new THREE.BufferGeometry();
-        const starCount = 5000;
-        const positions = new Float32Array(starCount * 3);
-        const colors = new Float32Array(starCount * 3);
+        const starCount = 1000;
+        const stars = new THREE.Group();
         
-        for (let i = 0; i < starCount * 3; i += 3) {
-            // Position
-            positions[i] = (Math.random() - 0.5) * 2000;
-            positions[i + 1] = (Math.random() - 0.5) * 2000;
-            positions[i + 2] = (Math.random() - 0.5) * 2000;
+        for (let i = 0; i < starCount; i++) {
+            const star = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5, 4, 4),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
             
-            // Color
-            const color = new THREE.Color();
-            color.setHSL(Math.random(), 0.5, 0.5 + Math.random() * 0.5);
-            colors[i] = color.r;
-            colors[i + 1] = color.g;
-            colors[i + 2] = color.b;
+            star.position.set(
+                (Math.random() - 0.5) * 2000,
+                (Math.random() - 0.5) * 2000,
+                (Math.random() - 0.5) * 2000
+            );
+            
+            stars.add(star);
         }
         
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        
-        const starMaterial = new THREE.PointsMaterial({
-            size: 0.7,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.8
-        });
-        
-        const stars = new THREE.Points(starGeometry, starMaterial);
         scene.add(stars);
         return stars;
     } catch (error) {
@@ -323,53 +360,21 @@ function createPlayerShip() {
     try {
         const group = new THREE.Group();
         
-        // Ship body
-        const bodyGeometry = new THREE.ConeGeometry(2, 6, 8);
-        const bodyMaterial = new THREE.MeshPhongMaterial({
+        // Simple ship geometry
+        const geometry = new THREE.ConeGeometry(2, 6, 8);
+        const material = new THREE.MeshPhongMaterial({
             color: 0x0080ff,
-            shininess: 100,
-            emissive: 0x002244,
-            emissiveIntensity: 0.3
-        });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.rotation.x = Math.PI / 2;
-        body.castShadow = true;
-        group.add(body);
-        
-        // Cockpit
-        const cockpitGeometry = new THREE.SphereGeometry(1.5, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-        const cockpitMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x00ffff,
-            transmission: 0.7,
-            thickness: 0.5,
-            roughness: 0.1
-        });
-        const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
-        cockpit.position.y = 0.8;
-        group.add(cockpit);
-        
-        // Wings
-        const wingGeometry = new THREE.BoxGeometry(5, 0.3, 2);
-        const wingMaterial = new THREE.MeshPhongMaterial({
-            color: 0x0044aa,
-            emissive: 0x001122,
-            emissiveIntensity: 0.2
+            shininess: 50
         });
         
-        const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
-        leftWing.position.set(-3, 0, -2);
-        leftWing.castShadow = true;
-        group.add(leftWing);
-        
-        const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
-        rightWing.position.set(3, 0, -2);
-        rightWing.castShadow = true;
-        group.add(rightWing);
+        const ship = new THREE.Mesh(geometry, material);
+        ship.rotation.x = Math.PI / 2;
+        group.add(ship);
         
         // Engine glow
-        const engineGlow = new THREE.PointLight(0xffff00, 2, 50);
-        engineGlow.position.set(0, 0, -3);
-        group.add(engineGlow);
+        const engineLight = new THREE.PointLight(0xffff00, 1, 50);
+        engineLight.position.set(0, 0, -3);
+        group.add(engineLight);
         
         group.position.set(0, 0, 0);
         scene.add(group);
@@ -380,7 +385,7 @@ function createPlayerShip() {
             speed: 0,
             maxSpeed: CONFIG.PLAYER_SPEED,
             rotationSpeed: CONFIG.PLAYER_ROTATION_SPEED,
-            engineLight: engineGlow
+            engineLight: engineLight
         };
         
         console.log("Player ship created successfully!");
@@ -397,7 +402,7 @@ function createWaypoints() {
     for (let i = 0; i < CONFIG.TOTAL_WAYPOINTS; i++) {
         try {
             const waypoint = new THREE.Mesh(
-                new THREE.SphereGeometry(20, 32, 32),
+                new THREE.SphereGeometry(20, 16, 16),
                 new THREE.MeshBasicMaterial({
                     color: i === 0 ? 0x00ff00 : 0x0088ff,
                     transparent: true,
@@ -406,7 +411,7 @@ function createWaypoints() {
                 })
             );
             
-            // Position waypoints in a line
+            // Position waypoints
             waypoint.position.set(
                 (Math.random() - 0.5) * 200,
                 (Math.random() - 0.5) * 100,
@@ -419,16 +424,12 @@ function createWaypoints() {
                 reached: false
             };
             
-            // Add glow effect
-            const glow = new THREE.PointLight(i === 0 ? 0x00ff00 : 0x0088ff, 2, 200);
-            glow.position.copy(waypoint.position);
-            scene.add(glow);
-            
             scene.add(waypoint);
             waypoints.push(waypoint);
             
-            // Create enemy patrols near waypoints
-            createEnemyPatrol(waypoint.position, 3);
+            // Create enemy patrols
+            createEnemyPatrol(waypoint.position, 2);
+            
         } catch (error) {
             console.error(`Error creating waypoint ${i}:`, error);
         }
@@ -456,45 +457,25 @@ function createEnemyShip() {
     try {
         const group = new THREE.Group();
         
-        // Enemy ship body (flying saucer)
-        const bodyGeometry = new THREE.CylinderGeometry(3, 2, 1, 16);
-        const bodyMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            emissive: 0x440000,
-            emissiveIntensity: 0.3
+        // Simple enemy geometry
+        const geometry = new THREE.ConeGeometry(3, 4, 8);
+        const material = new THREE.MeshPhongMaterial({
+            color: 0xff0000
         });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        group.add(body);
         
-        // Dome
-        const domeGeometry = new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-        const domeMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0xff5555,
-            transmission: 0.4,
-            thickness: 0.3
-        });
-        const dome = new THREE.Mesh(domeGeometry, domeMaterial);
-        dome.position.y = 0.5;
-        group.add(dome);
+        const enemy = new THREE.Mesh(geometry, material);
+        group.add(enemy);
         
-        // Engine glow
-        const engineLight = new THREE.PointLight(0xff0000, 1, 50);
-        engineLight.position.set(0, -0.5, 0);
-        group.add(engineLight);
-        
-        // Add to scene
-        const enemy = group;
         enemy.userData = {
             isEnemy: true,
             health: 100,
             maxHealth: 100,
             speed: CONFIG.ENEMY_SPEED,
             fireRate: CONFIG.ENEMY_FIRE_RATE,
-            lastFire: 0,
-            target: null
+            lastFire: 0
         };
         
-        return enemy;
+        return group;
     } catch (error) {
         console.error("Error creating enemy ship:", error);
         return null;
@@ -504,14 +485,12 @@ function createEnemyShip() {
 function createAsteroidField() {
     asteroids = [];
     
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 30; i++) {
         try {
             const size = Math.random() * 10 + 5;
-            const geometry = new THREE.SphereGeometry(size, 8, 8);
+            const geometry = new THREE.SphereGeometry(size, 6, 6);
             const material = new THREE.MeshPhongMaterial({
-                color: 0x888888,
-                emissive: 0x222222,
-                emissiveIntensity: 0.1
+                color: 0x888888
             });
             
             const asteroid = new THREE.Mesh(geometry, material);
@@ -538,9 +517,9 @@ function createAsteroidField() {
 function createHealthPacks() {
     healthPacks = [];
     
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 8; i++) {
         try {
-            const geometry = new THREE.SphereGeometry(5, 16, 16);
+            const geometry = new THREE.SphereGeometry(5, 8, 8);
             const material = new THREE.MeshBasicMaterial({
                 color: 0x00ff00,
                 transparent: true,
@@ -566,6 +545,78 @@ function createHealthPacks() {
             console.error("Error creating health pack:", error);
         }
     }
+}
+
+function initMobileControls() {
+    console.log("Initializing mobile controls...");
+    
+    const joystick = document.getElementById('leftJoystick');
+    if (!joystick) return;
+    
+    const stick = joystick.querySelector('.stick');
+    
+    joystick.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        joystickActive = true;
+    });
+    
+    joystick.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!joystickActive) return;
+        
+        const rect = joystick.getBoundingClientRect();
+        const touch = e.touches[0];
+        
+        const x = touch.clientX - (rect.left + rect.width / 2);
+        const y = touch.clientY - (rect.top + rect.height / 2);
+        
+        const distance = Math.min(50, Math.sqrt(x*x + y*y));
+        const angle = Math.atan2(y, x);
+        
+        // Move the stick
+        stick.style.left = 35 + Math.cos(angle) * distance + 'px';
+        stick.style.top = 35 + Math.sin(angle) * distance + 'px';
+        
+        // Calculate joystick values
+        joystickX = x / 50;
+        joystickY = y / 50;
+    });
+    
+    joystick.addEventListener('touchend', () => {
+        joystickActive = false;
+        stick.style.left = '35px';
+        stick.style.top = '35px';
+        joystickX = 0;
+        joystickY = 0;
+    });
+    
+    // Fire buttons
+    document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        fireBullet();
+    });
+    
+    document.getElementById('bombBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        fireBomb();
+    });
+    
+    document.getElementById('missileBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        fireMissile();
+    });
+    
+    document.getElementById('boostBtn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isBoosting = true;
+    });
+    
+    document.getElementById('boostBtn').addEventListener('touchend', (e) => {
+        e.preventDefault();
+        isBoosting = false;
+    });
+    
+    console.log("Mobile controls initialized!");
 }
 
 function setupEventListeners() {
@@ -609,9 +660,9 @@ function setupEventListeners() {
         document.addEventListener('mousedown', (e) => {
             mouse.down = true;
             if (gameState.missionStarted && !gameState.isPaused) {
-                if (e.button === 0) { // Left click
+                if (e.button === 0) {
                     fireBullet();
-                } else if (e.button === 2) { // Right click
+                } else if (e.button === 2) {
                     fireBomb();
                 }
             }
@@ -635,22 +686,33 @@ function setupEventListeners() {
         document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
         document.getElementById('retryBtn').addEventListener('click', startNewGame);
         document.getElementById('quitToMenuBtn').addEventListener('click', () => {
-            stopGameLoop();
             showScreen('mainMenu');
         });
         document.getElementById('playAgainBtn').addEventListener('click', startNewGame);
         document.getElementById('backToMenuCompleteBtn').addEventListener('click', () => {
-            stopGameLoop();
             showScreen('mainMenu');
         });
         document.getElementById('continueMissionBtn').addEventListener('click', continueMission);
-        document.getElementById('useDroneBtn').addEventListener('click', deployDrone);
-        document.getElementById('useNukeBtn').addEventListener('click', useNuclearBomb);
+        
+        // AI Voice buttons
+        document.getElementById('repeatVoiceBtn').addEventListener('click', () => {
+            const aiMessage = document.getElementById('aiMessage').textContent;
+            if (aiMessage) {
+                showAITextResponse(aiMessage);
+            }
+        });
+        
+        document.getElementById('closeVoiceBtn').addEventListener('click', () => {
+            document.getElementById('aiVoiceResponse').classList.add('hidden');
+        });
         
         // Close performance warning
         document.getElementById('closePerfWarning').addEventListener('click', () => {
             document.getElementById('perfWarning').classList.add('hidden');
         });
+        
+        // Window resize
+        window.addEventListener('resize', onWindowResize);
         
         // Prevent context menu on right click
         document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -663,9 +725,6 @@ function setupEventListeners() {
 
 function startNewGame() {
     console.log("Starting new game...");
-    
-    // Stop any existing game loop
-    stopGameLoop();
     
     // Reset game state
     resetGameState();
@@ -686,7 +745,7 @@ function startNewGame() {
     document.getElementById('waypointIndicator').classList.remove('hidden');
     
     // Hide other screens
-    document.getElementById('mainMenu').classList.add('hidden');
+    document.getElementById('mainMenuScreen').classList.add('hidden');
     document.getElementById('gameOverScreen').classList.add('hidden');
     document.getElementById('missionCompleteScreen').classList.add('hidden');
     document.getElementById('finalBattleHUD').classList.add('hidden');
@@ -697,17 +756,23 @@ function startNewGame() {
     gameState.currentWaypoint = 1;
     gameState.isPaused = false;
     gameState.isGameOver = false;
+    gameState.missionStartTime = Date.now();
+    
+    // AI mission start message
+    if (gameState.settings.aiVoice) {
+        setTimeout(() => {
+            showAITextResponse("Mission started. Good luck Commander! Follow the waypoints to the alien space station.");
+        }, 1000);
+    }
     
     // Update HUD
     updateHUD();
     updateWaypointDisplay();
     
     // Start game loop
-    if (!gameState.isPaused && renderer && scene && camera) {
+    if (!animationFrameId) {
         console.log("Starting game animation loop...");
         animate();
-    } else {
-        console.error("Cannot start game: Missing renderer, scene, or camera");
     }
     
     console.log("New game started!");
@@ -715,20 +780,9 @@ function startNewGame() {
 
 function clearScene() {
     try {
-        // Remove all objects from scene except camera and lights
-        const objectsToRemove = [];
-        
-        scene.children.forEach(object => {
-            // Keep camera and basic lights
-            if (!object.isCamera && 
-                !object.isLight && 
-                object.type !== 'AmbientLight' && 
-                object.type !== 'DirectionalLight') {
-                objectsToRemove.push(object);
-            }
-        });
-        
-        objectsToRemove.forEach(object => {
+        // Remove all objects from scene
+        while(scene.children.length > 0) {
+            const object = scene.children[0];
             if (object.geometry) object.geometry.dispose();
             if (object.material) {
                 if (Array.isArray(object.material)) {
@@ -738,7 +792,7 @@ function clearScene() {
                 }
             }
             scene.remove(object);
-        });
+        }
         
         // Clear arrays
         waypoints = [];
@@ -773,6 +827,7 @@ function resetGameState() {
         missionStarted: true,
         currentWaypoint: 1,
         missionComplete: false,
+        missionStartTime: Date.now(),
         
         player: {
             health: 100,
@@ -783,7 +838,9 @@ function resetGameState() {
             kills: 0,
             distance: 0,
             position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 }
+            rotation: { x: 0, y: 0, z: 0 },
+            bulletsFired: 0,
+            hits: 0
         },
         
         weapons: {
@@ -809,7 +866,14 @@ function resetGameState() {
             masterVolume: parseFloat(localStorage.getItem('galacticWarMasterVolume') || '0.8'),
             musicVolume: parseFloat(localStorage.getItem('galacticWarMusicVolume') || '0.7'),
             sfxVolume: parseFloat(localStorage.getItem('galacticWarSfxVolume') || '0.9'),
-            autoAim: localStorage.getItem('galacticWarAutoAim') === 'true' || true
+            voiceVolume: parseFloat(localStorage.getItem('galacticWarVoiceVolume') || '0.85'),
+            autoAim: localStorage.getItem('galacticWarAutoAim') !== 'false',
+            aiVoice: localStorage.getItem('galacticWarAiVoice') !== 'false',
+            audioEnabled: false
+        },
+        
+        audio: {
+            enabled: false
         }
     };
     console.log("Game state reset");
@@ -820,10 +884,8 @@ function togglePause() {
     
     if (gameState.isPaused) {
         console.log("Game paused");
-        stopGameLoop();
     } else {
         console.log("Game resumed");
-        animate();
     }
 }
 
@@ -831,20 +893,27 @@ function updatePlayerMovement() {
     if (!playerShip || !playerShip.mesh || gameState.isPaused) return;
     
     try {
-        // Calculate movement direction based on keys
+        // Calculate movement direction
         const moveVector = new THREE.Vector3(0, 0, 0);
         
-        if (keys['KeyW'] || keys['ArrowUp']) {
-            moveVector.z -= 1;
-        }
-        if (keys['KeyS'] || keys['ArrowDown']) {
-            moveVector.z += 1;
-        }
-        if (keys['KeyA'] || keys['ArrowLeft']) {
-            moveVector.x -= 1;
-        }
-        if (keys['KeyD'] || keys['ArrowRight']) {
-            moveVector.x += 1;
+        if (joystickActive) {
+            // Use mobile joystick
+            moveVector.x = joystickX;
+            moveVector.z = -joystickY;
+        } else {
+            // Use keyboard
+            if (keys['KeyW'] || keys['ArrowUp']) {
+                moveVector.z -= 1;
+            }
+            if (keys['KeyS'] || keys['ArrowDown']) {
+                moveVector.z += 1;
+            }
+            if (keys['KeyA'] || keys['ArrowLeft']) {
+                moveVector.x -= 1;
+            }
+            if (keys['KeyD'] || keys['ArrowRight']) {
+                moveVector.x += 1;
+            }
         }
         
         // Normalize and apply speed
@@ -863,8 +932,13 @@ function updatePlayerMovement() {
         
         // Apply mouse rotation
         const rotationSpeed = 0.01;
-        playerShip.mesh.rotation.y = -mouse.x * Math.PI * 0.5;
-        playerShip.mesh.rotation.x = mouse.y * Math.PI * 0.25;
+        if (joystickActive) {
+            playerShip.mesh.rotation.y = -joystickX * Math.PI * 0.5;
+            playerShip.mesh.rotation.x = joystickY * Math.PI * 0.25;
+        } else {
+            playerShip.mesh.rotation.y = -mouse.x * Math.PI * 0.5;
+            playerShip.mesh.rotation.x = mouse.y * Math.PI * 0.25;
+        }
         
         // Update camera position
         const cameraOffset = new THREE.Vector3(0, 15, 30);
@@ -881,7 +955,7 @@ function updatePlayerMovement() {
         
         gameState.player.distance = Math.abs(playerShip.mesh.position.z);
         
-        // Update engine light intensity based on speed
+        // Update engine light
         if (playerShip.engineLight) {
             playerShip.engineLight.intensity = 1 + playerShip.speed / CONFIG.PLAYER_SPEED;
         }
@@ -893,8 +967,9 @@ function updatePlayerMovement() {
 function updateEnemies() {
     if (!playerShip || !playerShip.mesh) return;
     
-    enemies.forEach((enemy, index) => {
-        if (!enemy.userData || !enemy.position) return;
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        if (!enemy.userData || !enemy.position) continue;
         
         try {
             // Move towards player
@@ -918,12 +993,10 @@ function updateEnemies() {
                 enemy.userData.lastFire = now;
             }
             
-            // Check collision with player bullets
-            checkEnemyCollisions(enemy, index);
         } catch (error) {
-            console.error("Error updating enemy:", error, enemy);
+            console.error("Error updating enemy:", error);
         }
-    });
+    }
 }
 
 function fireEnemyWeapon(enemy) {
@@ -931,7 +1004,7 @@ function fireEnemyWeapon(enemy) {
     
     try {
         const bullet = new THREE.Mesh(
-            new THREE.SphereGeometry(1, 8, 8),
+            new THREE.SphereGeometry(1, 4, 4),
             new THREE.MeshBasicMaterial({ color: 0xff5555 })
         );
         
@@ -958,9 +1031,12 @@ function fireEnemyWeapon(enemy) {
 function fireBullet() {
     if (!gameState.missionStarted || gameState.isPaused || !playerShip) return;
     
+    // Update stats
+    gameState.player.bulletsFired++;
+    
     try {
         const bullet = new THREE.Mesh(
-            new THREE.SphereGeometry(0.5, 8, 8),
+            new THREE.SphereGeometry(0.5, 4, 4),
             new THREE.MeshBasicMaterial({ color: 0x00ffff })
         );
         
@@ -972,7 +1048,7 @@ function fireBullet() {
         
         bullet.position.copy(bulletPosition);
         
-        // Calculate direction based on mouse position
+        // Calculate direction
         const direction = new THREE.Vector3(mouse.x, mouse.y, -1).normalize();
         
         bullet.userData = {
@@ -985,8 +1061,6 @@ function fireBullet() {
         scene.add(bullet);
         bullets.push(bullet);
         
-        // Create muzzle flash
-        createMuzzleFlash(bulletPosition);
     } catch (error) {
         console.error("Error firing bullet:", error);
     }
@@ -999,7 +1073,7 @@ function fireBomb() {
     
     try {
         const bomb = new THREE.Mesh(
-            new THREE.SphereGeometry(2, 16, 16),
+            new THREE.SphereGeometry(2, 8, 8),
             new THREE.MeshBasicMaterial({ color: 0xff5500 })
         );
         
@@ -1102,25 +1176,14 @@ function fireMissile() {
     }
 }
 
-function createMuzzleFlash(position) {
-    try {
-        const flash = new THREE.PointLight(0xffff00, 5, 20);
-        flash.position.copy(position);
-        scene.add(flash);
-        
-        // Remove flash after short time
-        setTimeout(() => {
-            scene.remove(flash);
-        }, 50);
-    } catch (error) {
-        console.error("Error creating muzzle flash:", error);
-    }
-}
-
 function updateProjectiles() {
     // Update bullets
-    bullets.forEach((bullet, index) => {
-        if (!bullet.userData || !bullet.position) return;
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        if (!bullet.userData || !bullet.position) {
+            bullets.splice(i, 1);
+            continue;
+        }
         
         try {
             bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
@@ -1128,17 +1191,20 @@ function updateProjectiles() {
             
             if (bullet.userData.life <= 0) {
                 scene.remove(bullet);
-                bullets.splice(index, 1);
+                bullets.splice(i, 1);
             }
         } catch (error) {
-            console.error("Error updating bullet:", error);
-            bullets.splice(index, 1);
+            bullets.splice(i, 1);
         }
-    });
+    }
     
     // Update bombs
-    bombs.forEach((bomb, index) => {
-        if (!bomb.userData || !bomb.position) return;
+    for (let i = bombs.length - 1; i >= 0; i--) {
+        const bomb = bombs[i];
+        if (!bomb.userData || !bomb.position) {
+            bombs.splice(i, 1);
+            continue;
+        }
         
         try {
             bomb.position.add(bomb.userData.velocity.clone().multiplyScalar(deltaTime));
@@ -1147,17 +1213,20 @@ function updateProjectiles() {
             if (bomb.userData.life <= 0) {
                 createExplosion(bomb.position, bomb.userData.explosionRadius);
                 scene.remove(bomb);
-                bombs.splice(index, 1);
+                bombs.splice(i, 1);
             }
         } catch (error) {
-            console.error("Error updating bomb:", error);
-            bombs.splice(index, 1);
+            bombs.splice(i, 1);
         }
-    });
+    }
     
     // Update missiles
-    missiles.forEach((missile, index) => {
-        if (!missile.userData || !missile.position) return;
+    for (let i = missiles.length - 1; i >= 0; i--) {
+        const missile = missiles[i];
+        if (!missile.userData || !missile.position) {
+            missiles.splice(i, 1);
+            continue;
+        }
         
         try {
             // Homing missile logic
@@ -1178,45 +1247,50 @@ function updateProjectiles() {
             if (missile.userData.life <= 0) {
                 createExplosion(missile.position, 30);
                 scene.remove(missile);
-                missiles.splice(index, 1);
+                missiles.splice(i, 1);
             }
         } catch (error) {
-            console.error("Error updating missile:", error);
-            missiles.splice(index, 1);
+            missiles.splice(i, 1);
         }
-    });
+    }
 }
 
 function checkCollisions() {
     if (!playerShip || !playerShip.mesh) return;
     
     // Check player bullets vs enemies
-    bullets.forEach((bullet, bulletIndex) => {
-        if (!bullet.userData || !bullet.userData.isPlayerBullet) return;
+    for (let b = bullets.length - 1; b >= 0; b--) {
+        const bullet = bullets[b];
+        if (!bullet.userData || !bullet.userData.isPlayerBullet) continue;
         
-        enemies.forEach((enemy, enemyIndex) => {
+        for (let e = enemies.length - 1; e >= 0; e--) {
+            const enemy = enemies[e];
             if (bullet.position.distanceTo(enemy.position) < 10) {
                 // Hit enemy
                 enemy.userData.health -= bullet.userData.damage;
+                gameState.player.hits++;
                 
                 // Create hit effect
                 createHitEffect(bullet.position);
                 
                 // Remove bullet
                 scene.remove(bullet);
-                bullets.splice(bulletIndex, 1);
+                bullets.splice(b, 1);
                 
                 // Check if enemy is destroyed
                 if (enemy.userData.health <= 0) {
-                    destroyEnemy(enemy, enemyIndex);
+                    destroyEnemy(enemy, e);
                 }
+                
+                break;
             }
-        });
-    });
+        }
+    }
     
     // Check enemy bullets vs player
-    bullets.forEach((bullet, bulletIndex) => {
-        if (!bullet.userData || !bullet.userData.isEnemyBullet) return;
+    for (let b = bullets.length - 1; b >= 0; b--) {
+        const bullet = bullets[b];
+        if (!bullet.userData || !bullet.userData.isEnemyBullet) continue;
         
         if (bullet.position.distanceTo(playerShip.mesh.position) < 5) {
             // Hit player
@@ -1226,13 +1300,30 @@ function checkCollisions() {
             createHitEffect(bullet.position);
             
             // Show damage overlay if health is low
+            const damageOverlay = document.getElementById('damageOverlay');
             if (gameState.player.health < 30) {
-                document.getElementById('damageOverlay').classList.add('critical');
+                damageOverlay.classList.add('critical');
+                
+                // Show warning
+                showWarning('damageWarning', 'TAKING DAMAGE!');
+                
+                // AI warning
+                if (gameState.player.health < 20 && gameState.settings.aiVoice) {
+                    showAITextResponse("Warning! Critical damage! Find health packs immediately!");
+                }
+            } else {
+                damageOverlay.classList.remove('critical');
             }
+            
+            // Flash damage overlay
+            damageOverlay.classList.remove('hidden');
+            setTimeout(() => {
+                damageOverlay.classList.add('hidden');
+            }, 200);
             
             // Remove bullet
             scene.remove(bullet);
-            bullets.splice(bulletIndex, 1);
+            bullets.splice(b, 1);
             
             // Update HUD
             updateHUD();
@@ -1242,44 +1333,58 @@ function checkCollisions() {
                 gameOver();
             }
         }
-    });
+    }
     
     // Check bombs vs enemies
-    bombs.forEach((bomb, bombIndex) => {
-        enemies.forEach((enemy, enemyIndex) => {
+    for (let b = bombs.length - 1; b >= 0; b--) {
+        const bomb = bombs[b];
+        
+        for (let e = enemies.length - 1; e >= 0; e--) {
+            const enemy = enemies[e];
             if (bomb.position.distanceTo(enemy.position) < 15) {
                 // Destroy bomb and damage enemy
                 enemy.userData.health -= bomb.userData.damage;
                 
                 // Check if enemy is destroyed
                 if (enemy.userData.health <= 0) {
-                    destroyEnemy(enemy, enemyIndex);
+                    destroyEnemy(enemy, e);
                 }
+                
+                // Remove bomb
+                scene.remove(bomb);
+                bombs.splice(b, 1);
+                break;
             }
-        });
-    });
+        }
+    }
     
     // Check missiles vs enemies
-    missiles.forEach((missile, missileIndex) => {
-        enemies.forEach((enemy, enemyIndex) => {
+    for (let m = missiles.length - 1; m >= 0; m--) {
+        const missile = missiles[m];
+        
+        for (let e = enemies.length - 1; e >= 0; e--) {
+            const enemy = enemies[e];
             if (missile.position.distanceTo(enemy.position) < 10) {
                 // Destroy missile and enemy
                 enemy.userData.health -= missile.userData.damage;
+                gameState.player.hits++;
                 
                 // Check if enemy is destroyed
                 if (enemy.userData.health <= 0) {
-                    destroyEnemy(enemy, enemyIndex);
+                    destroyEnemy(enemy, e);
                 }
                 
                 // Remove missile
                 scene.remove(missile);
-                missiles.splice(missileIndex, 1);
+                missiles.splice(m, 1);
+                break;
             }
-        });
-    });
+        }
+    }
     
     // Check player vs health packs
-    healthPacks.forEach((healthPack, index) => {
+    for (let h = healthPacks.length - 1; h >= 0; h--) {
+        const healthPack = healthPacks[h];
         if (playerShip.mesh.position.distanceTo(healthPack.position) < 10) {
             // Collect health pack
             gameState.player.health = Math.min(gameState.player.maxHealth, gameState.player.health + 20);
@@ -1287,14 +1392,19 @@ function checkCollisions() {
             // Show notification
             showNotification('healthPickup', '+20 Health Restored!');
             
+            // AI comment
+            if (gameState.settings.aiVoice && gameState.player.health > 70) {
+                showAITextResponse("Health restored. Good work Commander!");
+            }
+            
             // Remove health pack
             scene.remove(healthPack);
-            healthPacks.splice(index, 1);
+            healthPacks.splice(h, 1);
             
             // Update HUD
             updateHUD();
         }
-    });
+    }
     
     // Check player vs waypoints
     waypoints.forEach((waypoint, index) => {
@@ -1305,23 +1415,90 @@ function checkCollisions() {
             waypoint.userData.reached = true;
             gameState.currentWaypoint = index + 1;
             
+            // Generate AI advice
+            const aiAdvice = generateAIAdvice();
+            
             // Show congratulations
-            showCongratulations(`Waypoint ${index + 1} Reached!`);
+            showCongratulations(`Waypoint ${index + 1} Reached!`, aiAdvice);
             
             // Update waypoint display
             updateWaypointDisplay();
             
             // If this is the last waypoint, start final battle
             if (index === waypoints.length - 1) {
-                startFinalBattle();
+                setTimeout(startFinalBattle, 2000);
             }
         }
     });
 }
 
-function checkEnemyCollisions(enemy, enemyIndex) {
-    // This function is called from updateEnemies
-    // Additional collision checks can be added here
+function generateAIAdvice() {
+    const accuracy = gameState.player.bulletsFired > 0 
+        ? Math.round((gameState.player.hits / gameState.player.bulletsFired) * 100) 
+        : 0;
+    
+    const healthPercentage = (gameState.player.health / gameState.player.maxHealth) * 100;
+    const enemyCount = enemies.length;
+    
+    let advice = "";
+    
+    if (accuracy > 70) {
+        advice = "Excellent shooting accuracy! Your targeting is precise.";
+    } else if (accuracy > 40) {
+        advice = "Good shooting. Try to lead your targets more for better accuracy.";
+    } else {
+        advice = "Your accuracy needs improvement. Try to aim ahead of moving targets.";
+    }
+    
+    if (healthPercentage < 50) {
+        advice += " Your health is low. Be more evasive and look for health packs.";
+    } else if (healthPercentage > 80) {
+        advice += " Your health is optimal. Maintain this defensive strategy.";
+    }
+    
+    if (enemyCount > 10) {
+        advice += " Many enemies ahead. Consider using bombs for crowd control.";
+    } else if (gameState.weapons.missiles < 2) {
+        advice += " Missiles are low. Save them for tougher enemies.";
+    }
+    
+    return advice || "Keep going Commander! You're doing well.";
+}
+
+function showWarning(type, message) {
+    try {
+        const warning = document.getElementById(type);
+        if (warning) {
+            const span = warning.querySelector('span');
+            if (span) span.textContent = message;
+            warning.classList.remove('hidden');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                warning.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        console.error("Error showing warning:", error);
+    }
+}
+
+function showNotification(type, message) {
+    try {
+        const notification = document.getElementById(type);
+        if (notification) {
+            const span = notification.querySelector('span');
+            if (span) span.textContent = message;
+            notification.classList.remove('hidden');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 3000);
+        }
+    } catch (error) {
+        console.error("Error showing notification:", error);
+    }
 }
 
 function destroyEnemy(enemy, index) {
@@ -1346,45 +1523,32 @@ function destroyEnemy(enemy, index) {
 
 function createExplosion(position, size) {
     try {
-        // Create explosion particles
-        const particleCount = 50;
-        const particles = new THREE.BufferGeometry();
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
+        // Simple explosion effect
+        const explosion = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 8, 8),
+            new THREE.MeshBasicMaterial({ 
+                color: 0xff5500,
+                transparent: true,
+                opacity: 0.7
+            })
+        );
         
-        for (let i = 0; i < particleCount * 3; i += 3) {
-            // Random position within explosion radius
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * size;
-            
-            positions[i] = position.x + Math.cos(angle) * radius;
-            positions[i + 1] = position.y + Math.random() * size;
-            positions[i + 2] = position.z + Math.sin(angle) * radius;
-            
-            // Random color (yellow to red)
-            colors[i] = 1; // R
-            colors[i + 1] = Math.random() * 0.5; // G
-            colors[i + 2] = 0; // B
-        }
-        
-        particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        
-        const particleMaterial = new THREE.PointsMaterial({
-            size: 2,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending
-        });
-        
-        const explosion = new THREE.Points(particles, particleMaterial);
+        explosion.position.copy(position);
         scene.add(explosion);
         
         // Animate explosion
+        const scale = { value: 1 };
+        gsap.to(scale, {
+            value: 3,
+            duration: 0.3,
+            onUpdate: () => {
+                explosion.scale.set(scale.value, scale.value, scale.value);
+            }
+        });
+        
         gsap.to(explosion.material, {
             opacity: 0,
-            duration: 1,
+            duration: 0.5,
             onComplete: () => {
                 scene.remove(explosion);
             }
@@ -1396,7 +1560,7 @@ function createExplosion(position, size) {
 
 function createHitEffect(position) {
     try {
-        const hitEffect = new THREE.PointLight(0xff0000, 5, 30);
+        const hitEffect = new THREE.PointLight(0xff0000, 2, 20);
         hitEffect.position.copy(position);
         scene.add(hitEffect);
         
@@ -1407,6 +1571,35 @@ function createHitEffect(position) {
     } catch (error) {
         console.error("Error creating hit effect:", error);
     }
+}
+
+function showCongratulations(message, aiAdvice) {
+    try {
+        const congratsTitle = document.getElementById('congratsTitle');
+        const congratsMessage = document.getElementById('congratsMessage');
+        const aiAdviceText = document.getElementById('aiAdviceText');
+        
+        if (congratsTitle) congratsTitle.textContent = message;
+        if (congratsMessage) congratsMessage.textContent = 'Proceeding to next objective...';
+        if (aiAdviceText) aiAdviceText.textContent = aiAdvice;
+        
+        document.getElementById('congratulationsPopup').classList.remove('hidden');
+        
+        // Pause game
+        gameState.isPaused = true;
+        
+        // Show AI advice
+        if (gameState.settings.aiVoice) {
+            showAITextResponse(`Waypoint reached. ${aiAdvice}`);
+        }
+    } catch (error) {
+        console.error("Error showing congratulations:", error);
+    }
+}
+
+function continueMission() {
+    document.getElementById('congratulationsPopup').classList.add('hidden');
+    gameState.isPaused = false;
 }
 
 function startFinalBattle() {
@@ -1421,18 +1614,19 @@ function startFinalBattle() {
     
     // Update mission text
     document.getElementById('missionText').textContent = 'Destroy the Alien Space Station!';
+    
+    // AI announcement
+    if (gameState.settings.aiVoice) {
+        showAITextResponse("Final battle initiated! The alien space station is ahead. Destroy all defenses and target the main reactor!");
+    }
 }
 
 function createSpaceStation() {
     try {
-        // This would create the final space station with multiple layers
-        // For now, we'll just create a placeholder
         const station = new THREE.Mesh(
-            new THREE.SphereGeometry(100, 32, 32),
+            new THREE.SphereGeometry(100, 16, 16),
             new THREE.MeshPhongMaterial({
-                color: 0xff00ff,
-                emissive: 0x440044,
-                emissiveIntensity: 0.3
+                color: 0xff00ff
             })
         );
         
@@ -1454,8 +1648,8 @@ function createSpaceStation() {
 
 function createStationDefenses(position) {
     // Create defense turrets around the station
-    for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
+    for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
         const radius = 120;
         
         const turret = createTurret();
@@ -1490,57 +1684,6 @@ function createTurret() {
     } catch (error) {
         console.error("Error creating turret:", error);
         return null;
-    }
-}
-
-function deployDrone() {
-    if (gameState.weapons.drone <= 0) return;
-    
-    gameState.weapons.drone--;
-    
-    try {
-        // Create drone that follows and attacks enemies
-        const drone = new THREE.Mesh(
-            new THREE.SphereGeometry(3, 8, 8),
-            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-        );
-        
-        drone.position.copy(playerShip.mesh.position);
-        
-        drone.userData = {
-            isDrone: true,
-            health: 50,
-            target: null,
-            lastAttack: 0,
-            attackRate: 1000
-        };
-        
-        scene.add(drone);
-    } catch (error) {
-        console.error("Error deploying drone:", error);
-    }
-}
-
-function useNuclearBomb() {
-    if (gameState.weapons.nuke <= 0) return;
-    
-    gameState.weapons.nuke--;
-    
-    try {
-        // Create massive explosion that destroys everything
-        createExplosion(playerShip.mesh.position, 500);
-        
-        // Destroy all enemies in range
-        enemies.forEach((enemy, index) => {
-            if (enemy.position.distanceTo(playerShip.mesh.position) < 500) {
-                destroyEnemy(enemy, index);
-            }
-        });
-        
-        // Update HUD
-        updateHUD();
-    } catch (error) {
-        console.error("Error using nuclear bomb:", error);
     }
 }
 
@@ -1633,65 +1776,30 @@ function updateWaypointDisplay() {
     }
 }
 
-function showCongratulations(message) {
-    try {
-        const congratsTitle = document.getElementById('congratsTitle');
-        const congratsMessage = document.getElementById('congratsMessage');
-        
-        if (congratsTitle) congratsTitle.textContent = message;
-        if (congratsMessage) congratsMessage.textContent = 'Proceeding to next objective...';
-        
-        document.getElementById('congratulationsPopup').classList.remove('hidden');
-        
-        // Pause game
-        gameState.isPaused = true;
-    } catch (error) {
-        console.error("Error showing congratulations:", error);
-    }
-}
-
-function continueMission() {
-    document.getElementById('congratulationsPopup').classList.add('hidden');
-    gameState.isPaused = false;
-    
-    // Resume game loop
-    if (gameState.missionStarted && !gameState.isGameOver) {
-        animate();
-    }
-}
-
-function showNotification(type, message) {
-    try {
-        const notification = document.getElementById(type);
-        if (notification) {
-            const span = notification.querySelector('span');
-            if (span) span.textContent = message;
-            notification.classList.remove('hidden');
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
-                notification.classList.add('hidden');
-            }, 3000);
-        }
-    } catch (error) {
-        console.error("Error showing notification:", error);
-    }
-}
-
 function gameOver() {
     gameState.isGameOver = true;
     
     try {
+        // Calculate accuracy
+        const accuracy = gameState.player.bulletsFired > 0 
+            ? Math.round((gameState.player.hits / gameState.player.bulletsFired) * 100) 
+            : 0;
+        
+        // Generate AI analysis
+        const aiAnalysis = generateGameOverAnalysis(accuracy);
+        
         // Update final stats
         const finalDistance = document.getElementById('finalDistance');
         const finalKills = document.getElementById('finalKills');
         const finalWaypoints = document.getElementById('finalWaypoints');
         const finalScore = document.getElementById('finalScore');
+        const aiAnalysisText = document.getElementById('aiAnalysisText');
         
         if (finalDistance) finalDistance.textContent = Math.round(gameState.player.distance) + 'm';
         if (finalKills) finalKills.textContent = gameState.player.kills;
         if (finalWaypoints) finalWaypoints.textContent = `${gameState.currentWaypoint - 1}/${CONFIG.TOTAL_WAYPOINTS}`;
         if (finalScore) finalScore.textContent = gameState.player.score;
+        if (aiAnalysisText) aiAnalysisText.textContent = aiAnalysis;
         
         // Show game over screen
         document.getElementById('gameHUD').classList.add('hidden');
@@ -1700,29 +1808,83 @@ function gameOver() {
         document.getElementById('gameOverScreen').classList.remove('hidden');
         
         stopGameLoop();
+        
+        // AI analysis
+        if (gameState.settings.aiVoice) {
+            setTimeout(() => {
+                showAITextResponse(`Mission failed. ${aiAnalysis}`);
+            }, 1000);
+        }
     } catch (error) {
         console.error("Error in game over:", error);
     }
+}
+
+function generateGameOverAnalysis(accuracy) {
+    let analysis = "";
+    
+    if (gameState.player.distance < 1000) {
+        analysis = "You didn't get far. Try to avoid enemy fire and navigate more carefully.";
+    } else if (gameState.player.distance < 3000) {
+        analysis = "Good progress. You need to work on your evasion skills and target prioritization.";
+    } else {
+        analysis = "Excellent distance covered. Your navigation skills are good.";
+    }
+    
+    if (gameState.player.kills < 5) {
+        analysis += " Your combat effectiveness needs improvement. Focus on accuracy and weapon management.";
+    } else if (gameState.player.kills < 15) {
+        analysis += " Decent number of enemies eliminated. Work on your reaction time.";
+    } else {
+        analysis += " Outstanding combat performance! Your targeting was exceptional.";
+    }
+    
+    if (accuracy < 30) {
+        analysis += " Your accuracy was poor. Practice leading moving targets.";
+    } else if (accuracy < 60) {
+        analysis += " Average accuracy. Try to time your shots better.";
+    } else {
+        analysis += " Excellent shooting accuracy!";
+    }
+    
+    if (gameState.player.health < 30) {
+        analysis += " You took too much damage. Be more defensive and collect health packs.";
+    }
+    
+    analysis += " Next time, try to conserve special weapons for tougher enemies.";
+    
+    return analysis;
 }
 
 function missionComplete() {
     gameState.missionComplete = true;
     
     try {
-        // Update mission complete stats
-        const missionTime = Math.round(gameState.player.distance / CONFIG.PLAYER_SPEED);
+        // Calculate mission time
+        const missionTime = Math.round((Date.now() - gameState.missionStartTime) / 1000);
         const minutes = Math.floor(missionTime / 60);
         const seconds = missionTime % 60;
         
+        // Calculate accuracy
+        const accuracy = gameState.player.bulletsFired > 0 
+            ? Math.round((gameState.player.hits / gameState.player.bulletsFired) * 100) 
+            : 0;
+        
+        // Generate final AI analysis
+        const finalAnalysis = generateFinalAnalysis(missionTime, accuracy);
+        
+        // Update mission complete stats
         const missionTimeEl = document.getElementById('missionTime');
         const totalKillsEl = document.getElementById('totalKills');
         const missionAccuracyEl = document.getElementById('missionAccuracy');
         const missionScoreEl = document.getElementById('missionScore');
+        const finalAiAnalysis = document.getElementById('finalAiAnalysis');
         
         if (missionTimeEl) missionTimeEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         if (totalKillsEl) totalKillsEl.textContent = gameState.player.kills;
-        if (missionAccuracyEl) missionAccuracyEl.textContent = '85%'; // This would be calculated
+        if (missionAccuracyEl) missionAccuracyEl.textContent = accuracy + '%';
         if (missionScoreEl) missionScoreEl.textContent = gameState.player.score;
+        if (finalAiAnalysis) finalAiAnalysis.textContent = finalAnalysis;
         
         // Show mission complete screen
         document.getElementById('gameHUD').classList.add('hidden');
@@ -1747,9 +1909,54 @@ function missionComplete() {
         // Update total kills
         const savedKills = parseInt(localStorage.getItem('galacticWarKills') || '0');
         localStorage.setItem('galacticWarKills', (savedKills + gameState.player.kills).toString());
+        
+        // AI congratulations
+        if (gameState.settings.aiVoice) {
+            setTimeout(() => {
+                showAITextResponse(`Mission accomplished! Outstanding performance Commander! ${finalAnalysis}`);
+            }, 1000);
+        }
     } catch (error) {
         console.error("Error in mission complete:", error);
     }
+}
+
+function generateFinalAnalysis(missionTime, accuracy) {
+    let analysis = "";
+    
+    if (missionTime < 180) {
+        analysis = "Incredible speed! You completed the mission with exceptional efficiency. ";
+    } else if (missionTime < 300) {
+        analysis = "Good mission time. Your strategic planning was effective. ";
+    } else {
+        analysis = "Mission completed. You showed good persistence. ";
+    }
+    
+    if (accuracy > 80) {
+        analysis += "Your shooting accuracy was phenomenal! ";
+    } else if (accuracy > 60) {
+        analysis += "Good combat accuracy. ";
+    } else {
+        analysis += "Work on improving your targeting accuracy. ";
+    }
+    
+    if (gameState.player.kills > 20) {
+        analysis += "You eliminated a massive number of enemies. Excellent combat skills! ";
+    } else if (gameState.player.kills > 10) {
+        analysis += "Solid number of enemies destroyed. ";
+    }
+    
+    if (gameState.player.health > 70) {
+        analysis += "You maintained excellent ship integrity throughout the mission. ";
+    } else if (gameState.player.health > 40) {
+        analysis += "Your ship took some damage but remained operational. ";
+    } else {
+        analysis += "Your ship sustained heavy damage. Work on evasion techniques. ";
+    }
+    
+    analysis += "Overall, an impressive performance worthy of promotion to Fleet Admiral!";
+    
+    return analysis;
 }
 
 function createConfetti() {
@@ -1759,7 +1966,7 @@ function createConfetti() {
         
         confettiContainer.innerHTML = '';
         
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 50; i++) {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
             confetti.style.cssText = `
@@ -1809,9 +2016,7 @@ function loadSavedData() {
         // Load settings
         const difficulty = localStorage.getItem('galacticWarDifficulty');
         const autoAim = localStorage.getItem('galacticWarAutoAim');
-        const masterVolume = localStorage.getItem('galacticWarMasterVolume');
-        const musicVolume = localStorage.getItem('galacticWarMusicVolume');
-        const sfxVolume = localStorage.getItem('galacticWarSfxVolume');
+        const aiVoice = localStorage.getItem('galacticWarAiVoice');
         
         if (difficulty) {
             gameState.settings.difficulty = difficulty;
@@ -1819,29 +2024,18 @@ function loadSavedData() {
             if (difficultySelect) difficultySelect.value = difficulty;
         }
         
-        if (autoAim) {
+        if (autoAim !== null) {
             gameState.settings.autoAim = autoAim === 'true';
             const autoAimCheck = document.getElementById('autoAimCheck');
             if (autoAimCheck) autoAimCheck.checked = gameState.settings.autoAim;
         }
         
-        if (masterVolume) {
-            gameState.settings.masterVolume = parseFloat(masterVolume);
-            const masterVolumeSlider = document.getElementById('masterVolume');
-            if (masterVolumeSlider) masterVolumeSlider.value = gameState.settings.masterVolume * 100;
+        if (aiVoice !== null) {
+            gameState.settings.aiVoice = aiVoice === 'true';
+            const aiVoiceCheck = document.getElementById('aiVoiceCheck');
+            if (aiVoiceCheck) aiVoiceCheck.checked = gameState.settings.aiVoice;
         }
         
-        if (musicVolume) {
-            gameState.settings.musicVolume = parseFloat(musicVolume);
-            const musicVolumeSlider = document.getElementById('musicVolume');
-            if (musicVolumeSlider) musicVolumeSlider.value = gameState.settings.musicVolume * 100;
-        }
-        
-        if (sfxVolume) {
-            gameState.settings.sfxVolume = parseFloat(sfxVolume);
-            const sfxVolumeSlider = document.getElementById('sfxVolume');
-            if (sfxVolumeSlider) sfxVolumeSlider.value = gameState.settings.sfxVolume * 100;
-        }
     } catch (error) {
         console.error("Error loading saved data:", error);
     }
@@ -1852,9 +2046,7 @@ function saveSettings() {
         // Save settings to localStorage
         const difficultySelect = document.getElementById('difficultySelect');
         const autoAimCheck = document.getElementById('autoAimCheck');
-        const masterVolume = document.getElementById('masterVolume');
-        const musicVolume = document.getElementById('musicVolume');
-        const sfxVolume = document.getElementById('sfxVolume');
+        const aiVoiceCheck = document.getElementById('aiVoiceCheck');
         
         if (difficultySelect) {
             gameState.settings.difficulty = difficultySelect.value;
@@ -1866,19 +2058,9 @@ function saveSettings() {
             localStorage.setItem('galacticWarAutoAim', gameState.settings.autoAim.toString());
         }
         
-        if (masterVolume) {
-            gameState.settings.masterVolume = parseInt(masterVolume.value) / 100;
-            localStorage.setItem('galacticWarMasterVolume', gameState.settings.masterVolume.toString());
-        }
-        
-        if (musicVolume) {
-            gameState.settings.musicVolume = parseInt(musicVolume.value) / 100;
-            localStorage.setItem('galacticWarMusicVolume', gameState.settings.musicVolume.toString());
-        }
-        
-        if (sfxVolume) {
-            gameState.settings.sfxVolume = parseInt(sfxVolume.value) / 100;
-            localStorage.setItem('galacticWarSfxVolume', gameState.settings.sfxVolume.toString());
+        if (aiVoiceCheck) {
+            gameState.settings.aiVoice = aiVoiceCheck.checked;
+            localStorage.setItem('galacticWarAiVoice', gameState.settings.aiVoice.toString());
         }
         
         // Return to main menu
@@ -1889,9 +2071,10 @@ function saveSettings() {
 }
 
 function animate() {
-    if (!gameState.missionStarted || gameState.isPaused || gameState.isGameOver || !renderer || !scene || !camera) {
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
+    if (gameState.isPaused || gameState.isGameOver || !renderer || !scene || !camera) {
+        // Still render the scene even if paused
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
         }
         animationFrameId = requestAnimationFrame(animate);
         return;
@@ -1902,13 +2085,13 @@ function animate() {
         deltaTime = clock.getDelta();
         
         // Update game systems
-        updatePlayerMovement();
-        updateEnemies();
-        updateProjectiles();
-        checkCollisions();
-        
-        // Update HUD
-        updateHUD();
+        if (gameState.missionStarted && !gameState.isPaused && !gameState.isGameOver) {
+            updatePlayerMovement();
+            updateEnemies();
+            updateProjectiles();
+            checkCollisions();
+            updateHUD();
+        }
         
         // Render scene
         renderer.render(scene, camera);
@@ -1921,7 +2104,10 @@ function animate() {
     } catch (error) {
         console.error("Error in animation loop:", error);
         // Stop the loop on error
-        stopGameLoop();
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
     }
 }
 
@@ -1961,5 +2147,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Handle page unload
 window.addEventListener('beforeunload', () => {
-    stopGameLoop();
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
 });

@@ -45,6 +45,162 @@ canvas {
     display: block;
 }
 
+/* AI Voice Response */
+.ai-voice-response {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 20, 40, 0.95);
+    border: 2px solid var(--accent);
+    border-radius: 15px;
+    padding: 15px 20px;
+    backdrop-filter: blur(10px);
+    z-index: 1001;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 5px 30px rgba(0, 255, 170, 0.3);
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.ai-voice-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.ai-voice-content i {
+    font-size: 2rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.ai-text {
+    flex: 1;
+}
+
+.ai-text p {
+    color: white;
+    margin-bottom: 10px;
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+.ai-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.ai-buttons button {
+    background: rgba(0, 100, 200, 0.8);
+    border: 1px solid var(--primary);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.ai-buttons button:hover {
+    background: rgba(0, 120, 240, 0.9);
+    transform: translateY(-2px);
+}
+
+/* AI Advice Box in Popup */
+.ai-advice-box {
+    background: rgba(0, 100, 200, 0.2);
+    border: 1px solid var(--primary);
+    border-radius: 10px;
+    padding: 15px;
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.ai-advice-box i {
+    font-size: 1.5rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.ai-advice-box p {
+    color: white;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    flex: 1;
+}
+
+/* AI Analysis Box */
+.ai-analysis-box {
+    background: rgba(0, 20, 40, 0.9);
+    border: 2px solid var(--danger);
+    border-radius: 10px;
+    padding: 15px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.ai-analysis-box h3 {
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.ai-analysis-box p {
+    color: white;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.small-btn {
+    background: rgba(0, 100, 200, 0.8);
+    border: 1px solid var(--primary);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    transition: all 0.3s ease;
+}
+
+.small-btn:hover {
+    background: rgba(0, 120, 240, 0.9);
+    transform: translateY(-2px);
+}
+
+/* AI Congratulations */
+.ai-congratulations {
+    background: rgba(0, 100, 200, 0.2);
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.ai-congratulations h3 {
+    color: var(--accent);
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.ai-congratulations p {
+    color: white;
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
 /* Screens */
 .screen {
     position: fixed;
@@ -505,6 +661,11 @@ canvas {
 .mission-objective .warning {
     color: var(--warning);
     font-weight: bold;
+}
+
+.mission-objective .info {
+    color: var(--accent);
+    font-style: italic;
 }
 
 .howto-buttons {
@@ -1681,6 +1842,11 @@ canvas {
     .complete-stats {
         grid-template-columns: 1fr;
     }
+    
+    .ai-voice-response {
+        width: 95%;
+        padding: 10px 15px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1710,6 +1876,7 @@ canvas {
         justify-content: center;
     }
 }
+
 /* Mobile Controls */
 #mobileControls {
     position: fixed;
@@ -1758,4 +1925,39 @@ canvas {
     background: rgba(0, 150, 250, 0.6);
     color: white;
     font-weight: bold;
+}
+/* Add this to the end of your existing style.css file */
+
+.confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #f00;
+    top: -20px;
+    animation: fall 3s linear infinite;
+}
+
+@keyframes fall {
+    0% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+/* Add this for better mobile controls */
+@media (max-width: 768px) {
+    #mobileControls {
+        display: flex !important;
+    }
+    
+    .touch-btn {
+        width: 80px;
+        height: 50px;
+        font-size: 1rem;
+        margin: 5px;
+    }
 }

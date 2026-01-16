@@ -10,27 +10,69 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     
-    <!-- Three.js and related libraries - UPDATED VERSIONS -->
+    <!-- Three.js and related libraries - FIXED VERSION -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FilmShader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/loaders/GLTFLoader.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/postprocessing/RenderPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/shaders/FilmShader.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/shaders/CopyShader.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/jsm/controls/PointerLockControls.js"></script>
     
     <!-- Animation and UI Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2.3.4/tsparticles.bundle.min.js"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Audio Elements (Hidden) - REMOVED MP3 URLs to prevent loading errors -->
+    <audio id="backgroundMusic" loop>
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="bulletSound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="explosionSound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="missileSound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="healthSound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="warningSound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <audio id="victorySound">
+        <source src="data:audio/mpeg;base64,//tQxAAAA" type="audio/mpeg">
+    </audio>
+    
+    <!-- AI Voice Response Area -->
+    <div id="aiVoiceResponse" class="ai-voice-response hidden">
+        <div class="ai-voice-content">
+            <i class="fas fa-robot"></i>
+            <div class="ai-text">
+                <p id="aiMessage"></p>
+                <div class="ai-buttons">
+                    <button id="repeatVoiceBtn"><i class="fas fa-redo"></i> Read Again</button>
+                    <button id="closeVoiceBtn"><i class="fas fa-times"></i> Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- FPS Counter -->
     <div id="fpsCounter">FPS: 60</div>
     
@@ -68,6 +110,7 @@
             <div class="loading-tips">
                 <p><i class="fas fa-lightbulb"></i> Tip: Follow the glowing waypoints to complete the mission</p>
                 <p><i class="fas fa-lightbulb"></i> Tip: Collect health packs to restore your ship</p>
+                <p><i class="fas fa-volume-up"></i> Audio system: Fallback Mode</p>
             </div>
         </div>
     </div>
@@ -78,7 +121,7 @@
             <div class="menu-header">
                 <h1 class="game-title">GALACTIC WAR</h1>
                 <h2 class="commander-name">Commander: Ariq Azmain</h2>
-                <div class="version-tag">v3.0 - Mission Edition</div>
+                <div class="version-tag">v3.2 - Fixed Edition</div>
             </div>
             
             <div class="menu-stats">
@@ -110,10 +153,6 @@
                     <i class="fas fa-play-circle"></i>
                     <span>START MISSION</span>
                 </button>
-                <button id="continueBtn" class="menu-btn" disabled>
-                    <i class="fas fa-redo"></i>
-                    <span>CONTINUE</span>
-                </button>
                 <button id="howToPlayBtn" class="menu-btn">
                     <i class="fas fa-info-circle"></i>
                     <span>HOW TO PLAY</span>
@@ -128,6 +167,7 @@
                 <p><i class="fas fa-gamepad"></i> Use Arrow Keys/WASD to move</p>
                 <p><i class="fas fa-mouse"></i> Mouse to aim, Left Click to fire</p>
                 <p><i class="fas fa-space-shuttle"></i> SPACE for boost, R for missiles</p>
+                <p><i class="fas fa-robot"></i> AI Text Assistant Enabled</p>
             </div>
         </div>
     </div>
@@ -180,6 +220,7 @@
                 <p>3. Reach the Alien Space Station</p>
                 <p>4. Destroy all defenses and the main reactor</p>
                 <p class="warning">⚠️ Collect health packs to restore your ship!</p>
+                <p class="info">🎧 AI will give text advice during the mission!</p>
             </div>
             
             <div class="howto-buttons">
@@ -306,6 +347,10 @@
                     <i class="fas fa-shield-alt"></i>
                     <span>SHIELD</span>
                 </div>
+                <div class="status-item" id="audioStatus">
+                    <i class="fas fa-volume-mute"></i>
+                    <span>AUDIO</span>
+                </div>
             </div>
         </div>
         
@@ -317,27 +362,33 @@
             </div>
             <div class="warning hidden" id="missileWarning">
                 <i class="fas fa-rocket"></i>
-                    <span>INCOMING MISSILE!</span>
+                <span>INCOMING MISSILE!</span>
             </div>
             <div class="notification hidden" id="healthPickup">
                 <i class="fas fa-heart"></i>
                 <span>HEALTH RESTORED +20</span>
             </div>
+            <div class="notification hidden" id="aiNotification">
+                <i class="fas fa-robot"></i>
+                <span id="aiMessageText">AI: Message</span>
+            </div>
         </div>
     </div>
+    
     <!-- Mobile Touch Controls -->
-<div id="mobileControls" class="hidden">
-    <div id="leftJoystick" class="joystick">
-        <div class="stick"></div>
-    </div>
+    <div id="mobileControls" class="hidden">
+        <div id="leftJoystick" class="joystick">
+            <div class="stick"></div>
+        </div>
 
-    <div class="right-buttons">
-        <button id="fireBtn" class="touch-btn">FIRE</button>
-        <button id="bombBtn" class="touch-btn">BOMB</button>
-        <button id="missileBtn" class="touch-btn">MISSILE</button>
-        <button id="boostBtn" class="touch-btn">BOOST</button>
+        <div class="right-buttons">
+            <button id="fireBtn" class="touch-btn">FIRE</button>
+            <button id="bombBtn" class="touch-btn">BOMB</button>
+            <button id="missileBtn" class="touch-btn">MISSILE</button>
+            <button id="boostBtn" class="touch-btn">BOOST</button>
+        </div>
     </div>
-</div>
+    
     <!-- Damage Overlay -->
     <div id="damageOverlay" class="hidden"></div>
     
@@ -367,6 +418,10 @@
             </div>
             <h2 id="congratsTitle">WAYPOINT REACHED!</h2>
             <p id="congratsMessage">Proceeding to next objective...</p>
+            <div class="ai-advice-box">
+                <i class="fas fa-robot"></i>
+                <p id="aiAdviceText">Great work commander! Keep going!</p>
+            </div>
             <button id="continueMissionBtn" class="popup-btn">
                 CONTINUE <i class="fas fa-forward"></i>
             </button>
@@ -418,6 +473,14 @@
                 <p>Your ship has been destroyed</p>
             </div>
             
+            <div class="ai-analysis-box">
+                <h3><i class="fas fa-robot"></i> AI ANALYSIS OF YOUR PERFORMANCE:</h3>
+                <p id="aiAnalysisText">Analyzing mission data...</p>
+                <button id="playAnalysisVoice" class="small-btn">
+                    <i class="fas fa-volume-up"></i> Read Analysis
+                </button>
+            </div>
+            
             <div class="game-over-stats">
                 <div class="stat-item">
                     <span>Distance Traveled</span>
@@ -456,6 +519,14 @@
             <div class="complete-header">
                 <h1><i class="fas fa-trophy"></i> MISSION ACCOMPLISHED!</h1>
                 <p class="subtitle">Alien Space Station Destroyed</p>
+            </div>
+            
+            <div class="ai-congratulations">
+                <h3><i class="fas fa-robot"></i> COMMANDER'S PERFORMANCE ANALYSIS:</h3>
+                <p id="finalAiAnalysis">Outstanding performance! Your strategic skills are exceptional.</p>
+                <button id="playFinalVoice" class="small-btn">
+                    <i class="fas fa-volume-up"></i> Read Full Report
+                </button>
             </div>
             
             <div class="complete-stats">
@@ -520,21 +591,25 @@
                         Auto Aim Assist
                     </label>
                 </div>
+                <div class="setting">
+                    <label>
+                        <input type="checkbox" id="aiVoiceCheck" checked>
+                        AI Text Assistant
+                    </label>
+                </div>
             </div>
             
             <div class="settings-section">
                 <h3><i class="fas fa-volume-up"></i> AUDIO</h3>
+                <p style="color: #ff9900; margin-bottom: 15px;">
+                    <i class="fas fa-exclamation-triangle"></i> Audio is currently in fallback mode
+                </p>
                 <div class="setting">
-                    <label>Master Volume</label>
-                    <input type="range" id="masterVolume" min="0" max="100" value="80">
-                </div>
-                <div class="setting">
-                    <label>Music Volume</label>
-                    <input type="range" id="musicVolume" min="0" max="100" value="70">
-                </div>
-                <div class="setting">
-                    <label>SFX Volume</label>
-                    <input type="range" id="sfxVolume" min="0" max="100" value="90">
+                    <label>Audio Effects</label>
+                    <select id="audioModeSelect">
+                        <option value="off" selected>Off (Fallback)</option>
+                        <option value="basic">Basic Effects</option>
+                    </select>
                 </div>
             </div>
             
@@ -551,75 +626,5 @@
     
     <!-- Game Script -->
     <script src="script.js"></script>
-    <script>
-      
-
-    function enableMobileControls() {
-
-    // JOYSTICK LOGIC
-    const joystick = document.getElementById("leftJoystick");
-    const stick = joystick.querySelector(".stick");
-    let joyActive = false;
-
-    joystick.addEventListener("touchstart", (e) => {
-        joyActive = true;
-    });
-
-    joystick.addEventListener("touchmove", (e) => {
-        if (!joyActive) return;
-
-        const rect = joystick.getBoundingClientRect();
-        const touch = e.touches[0];
-
-        const x = touch.clientX - (rect.left + rect.width / 2);
-        const y = touch.clientY - (rect.top + rect.height / 2);
-
-        const distance = Math.min(50, Math.sqrt(x*x + y*y));
-        const angle = Math.atan2(y, x);
-
-        // Move the stick
-        stick.style.left = 35 + Math.cos(angle) * distance + "px";
-        stick.style.top = 35 + Math.sin(angle) * distance + "px";
-
-        // Apply movement
-        keys["ArrowUp"] = y < -10;
-        keys["ArrowDown"] = y > 10;
-        keys["ArrowLeft"] = x < -10;
-        keys["ArrowRight"] = x > 10;
-    });
-
-    joystick.addEventListener("touchend", () => {
-        joyActive = false;
-        stick.style.left = "35px";
-        stick.style.top = "35px";
-
-        keys["ArrowUp"] = false;
-        keys["ArrowDown"] = false;
-        keys["ArrowLeft"] = false;
-        keys["ArrowRight"] = false;
-    });
-
-    // FIRE BUTTONS
-    document.getElementById("fireBtn").addEventListener("touchstart", () => {
-        fireBullet();
-    });
-
-    document.getElementById("bombBtn").addEventListener("touchstart", () => {
-        fireBomb();
-    });
-
-    document.getElementById("missileBtn").addEventListener("touchstart", () => {
-        fireMissile();
-    });
-
-    document.getElementById("boostBtn").addEventListener("touchstart", () => {
-        isBoosting = true;
-    });
-
-    document.getElementById("boostBtn").addEventListener("touchend", () => {
-        isBoosting = false;
-    });
-}
-    </script>
 </body>
 </html>
